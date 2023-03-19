@@ -10,7 +10,7 @@ typedef struct ID3V2_HEADER {
 } ID3V2_HEADER;
 
 typedef struct ID3V2_FRAME_HEADER {
-    char fid[4+1];
+    char fid[4];
     char size[4];
     char flags[2];
 } ID3V2_FRAME_HEADER;
@@ -19,36 +19,25 @@ int synchsafeint32ToInt(char i[4]) {
     return (i[0] << 21) | ((i[1] << 14) | ((i[2] << 7) | (i[3] | (int)0)));
 }
 
-int main(int argc, int *argv) {
-    FILE *f = fopen("./testfile.mp3", "rb");
-
-    if (f == NULL) {
-        printf("File does not exist.\n");
-        exit(1);
-    }
-
+ID3V2_HEADER *read_header(FILE *f) {
     ID3V2_HEADER* header = malloc(sizeof(ID3V2_HEADER));
 
-    int fid_sz = fread(header->fid, 1, 3, f);
-    if (fid_sz != 3) {
+    if (fread(header->fid, 1, 3, f) != 3) {
         printf("Error occurred reading file identifier.\n");
         exit(1);
     }
 
-    int ver_sz = fread(header->ver, 1, 2, f);
-    if (ver_sz != 2) {
+    if (fread(header->ver, 1, 2, f) != 2) {
         printf("Error occurred reading version.\n");
         exit(1);
     }
 
-    int flags_sz = fread(&header->flags, 1, 1, f);
-    if (flags_sz != 1) {
+    if (fread(&header->flags, 1, 1, f) != 1) {
         printf("Error occurred flags.\n");
         exit(1);
     }
 
-    int size_sz = fread(&header->size, 1, 4, f);
-    if (size_sz != 4) {
+    if (fread(&header->size, 1, 4, f) != 4) {
         printf("Error occurred tag size.\n");
         exit(1);
     }
@@ -63,38 +52,78 @@ int main(int argc, int *argv) {
     printf("\t\tExtended Header: %d\n", header->flags >> 6);
     printf("\t\tExp. Indicator: %d\n", header->flags >> 5);
     printf("\t\tFooter present: %d\n", header->flags >> 4);
-    printf("\tTag Size: %d\n", metadata_size);
-    
-    int i = 0;
+    printf("\tTag Size: %d\n\n", metadata_size);
 
+    return header;
+}
+
+int main(int argc, char *argv[]) {
+    if (argc < 2) {
+        printf("Invalid number of arguments.\n");
+        exit(1);
+    }
+
+    FILE *f = fopen(argv[1], "rb");
+
+    if (f == NULL) {
+        printf("File does not exist.\n");
+        exit(1);
+    }
+
+    printf("Mode: Reading metadata\n\n");
+
+    ID3V2_HEADER *header = read_header(f);
+    int metadata_size = synchsafeint32ToInt(header->size);
+    
+    printf("Metadata found: \n");
+
+    int i = 0;
+    char *data;
+    char fid_str[5] = {'\0'};
     while (i < metadata_size) {
         ID3V2_FRAME_HEADER frame_header;
-
-        fid_sz = fread(frame_header.fid, 1, 4, f);
-        if (fid_sz != 4) {
+        
+        if (fread(frame_header.fid, 1, 4, f) != 4) {
             printf("Error occurred reading file identifier.\n");
             exit(1);
         }
-        size_sz = fread(frame_header.size, 1, 4, f);
-        if (size_sz != 4) {
+        if (fread(frame_header.size, 1, 4, f) != 4) {
             printf("Error occurred tag size.\n");
             exit(1);
         }
-        flags_sz = fread(frame_header.flags, 1, 2, f);
-        if (flags_sz != 2) {
+        if (fread(frame_header.flags, 1, 2, f) != 2) {
             printf("Error occurred flags.\n");
             exit(1);
         }
         int frame_data_sz = synchsafeint32ToInt(frame_header.size);
+        strncpy(fid_str, frame_header.fid, 4);
 
         if (frame_data_sz > 0) { 
-            printf("FID: %.4s, ", frame_header.fid);
+            printf("FID: %.4s, ", fid_str);
             printf("Size: %d\n", frame_data_sz);
+
+            data = malloc(frame_data_sz+1);
+            data[frame_data_sz] = '\0';
+            
+            if (fread(data, 1, frame_data_sz, f) != frame_data_sz){
+                printf("Error occurred reading frame data.\n");
+                exit(1);
+            }
+
+            if (strncmp(fid_str, "APIC", 4) != 0) {
+                // Printing char array with intermediate null chars
+                printf("\tData: ");
+                for (int j = 0; j < frame_data_sz; j++) {
+                    if (data[j] != '\0') printf("%c", data[j]);
+                }
+                printf("\n");
+            } 
+            else printf("\tData is an image\n");
+        } else {
+            fseek(f, frame_data_sz, SEEK_CUR);    
         }
 
-        i += 10 + frame_data_sz;
-
-        fseek(f, frame_data_sz, SEEK_CUR);
+        i += 10 + frame_data_sz; 
     }
 
     free(header);

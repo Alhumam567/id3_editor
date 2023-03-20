@@ -15,8 +15,14 @@ typedef struct ID3V2_FRAME_HEADER {
     char flags[2];
 } ID3V2_FRAME_HEADER;
 
-int synchsafeint32ToInt(char i[4]) {
-    return (i[0] << 21) | ((i[1] << 14) | ((i[2] << 7) | (i[3] | (int)0)));
+int synchsafeint32ToInt(char c[4]) {
+    return (c[0] << 21) | ((c[1] << 14) | ((c[2] << 7) | (c[3] | (int)0)));
+}
+
+char *intToSynchsafeint32(int x) {
+    char *ssint = malloc(4);
+    for (int i=0; i<4; i++) ssint[i] = (x & (0x7F << i*7)) >> i*7;
+    return ssint;
 }
 
 ID3V2_HEADER *read_header(FILE *f) {
@@ -63,7 +69,7 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
-    FILE *f = fopen(argv[1], "rb");
+    FILE *f = fopen(argv[1], "r+b");
 
     if (f == NULL) {
         printf("File does not exist.\n");
@@ -80,6 +86,7 @@ int main(int argc, char *argv[]) {
     int i = 0;
     char *data;
     char fid_str[5] = {'\0'};
+    int tit2_pos = 0;
     while (i < metadata_size) {
         ID3V2_FRAME_HEADER frame_header;
         
@@ -101,7 +108,6 @@ int main(int argc, char *argv[]) {
         if (frame_data_sz > 0) { 
             printf("FID: %.4s, ", fid_str);
             printf("Size: %d\n", frame_data_sz);
-
             data = malloc(frame_data_sz+1);
             data[frame_data_sz] = '\0';
             
@@ -111,21 +117,26 @@ int main(int argc, char *argv[]) {
             }
 
             if (strncmp(fid_str, "APIC", 4) != 0) {
+                
                 // Printing char array with intermediate null chars
                 printf("\tData: ");
                 for (int j = 0; j < frame_data_sz; j++) {
                     if (data[j] != '\0') printf("%c", data[j]);
                 }
                 printf("\n");
-            } 
+            }  
             else printf("\tData is an image\n");
         } else {
             fseek(f, frame_data_sz, SEEK_CUR);    
         }
 
         i += 10 + frame_data_sz; 
+        if (frame_data_sz > 0)
+            printf("%d\n", i);
     }
-
+    fseek(f,181751,SEEK_SET);
+    char temp[7] = {'C', 'h', 'A','r','r','e','d'};
+    fwrite(temp, 1, 7, f);
     free(header);
     fclose(f);
     return 0;

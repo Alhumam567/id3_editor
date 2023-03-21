@@ -15,6 +15,13 @@ typedef struct ID3V2_FRAME_HEADER {
     char flags[2];
 } ID3V2_FRAME_HEADER;
 
+typedef struct ID3_METAINFO {
+    int metadata_sz;
+    int frame_count;
+    char (*fids)[4];
+} ID3_METAINFO;
+
+
 int synchsafeint32ToInt(char c[4]) {
     return (c[0] << 21) | ((c[1] << 14) | ((c[2] << 7) | (c[3] | (int)0)));
 }
@@ -63,17 +70,19 @@ ID3V2_HEADER *read_header(FILE *f) {
     return header;
 }
 
-int get_metadata_size(FILE *f, ID3V2_HEADER *header, int metadata_alloc) {
-    int i = 0;
+ID3_METAINFO *get_ID3_meta_info(FILE *f, ID3V2_HEADER *header, int metadata_alloc) {
+    fseek(f, 10, SEEK_SET);
+    int sz = 0;
+    int frames = 0;
     
-    while (i < metadata_alloc) {
+    while (sz < metadata_alloc) {
         ID3V2_FRAME_HEADER frame_header;
         if (fread(frame_header.fid, 1, 4, f) != 4) {
             printf("Error occurred reading file identifier.\n");
             exit(1);
         }
 
-        if (strlen(frame_header.fid) == 0) return i;
+        if (strlen(frame_header.fid) == 0) break;
 
         if (fread(frame_header.size, 1, 4, f) != 4) {
             printf("Error occurred tag size.\n");
@@ -82,13 +91,38 @@ int get_metadata_size(FILE *f, ID3V2_HEADER *header, int metadata_alloc) {
         int frame_data_sz = synchsafeint32ToInt(frame_header.size);
 
         fseek(f, 2+frame_data_sz, SEEK_CUR);
-        i += 4 + 4 + 2 + frame_data_sz;
+        sz += 4 + 4 + 2 + frame_data_sz;
+        frames += 1;
     }
 
-    return i;
+    fseek(f, 10, SEEK_SET);
+
+    ID3_METAINFO *info = malloc(sizeof(ID3_METAINFO));
+    info->metadata_sz = sz;
+    info->frame_count = frames;
+    info->fids = malloc(frames);
+
+    for (int i = 0; i < frames; i++) {
+        if (fread(info->fids + i, 1, 4, f) != 4) {
+            printf("Error occurred reading file identifier.\n");
+            exit(1);
+        }
+        char ss_sz[4];
+        if (fread(&ss_sz, 1, sizeof(int), f) != 4) {
+            printf("Error occurred tag size.\n");
+            exit(1);
+        }
+        int frame_data_sz = synchsafeint32ToInt(ss_sz);
+        fseek(f, 2 + frame_data_sz, SEEK_CUR);
+    }
+
+    fseek(f, 10, SEEK_SET);
+    return info;
 }
 
 int main(int argc, char *argv[]) {
+    char *new_title = "Charred in the hot burning sun.";
+
     if (argc < 2) {
         printf("Invalid number of arguments.\n");
         exit(1);
@@ -101,27 +135,22 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
-    printf("Mode: Reading metadata\n\n");
-
     ID3V2_HEADER *header = read_header(f);
-    int metadata_alloc = synchsafeint32ToInt(header->size);
-    
-    printf("Metadata found: \n");
+    ID3_METAINFO *header_metainfo = get_ID3_meta_info(f, header, synchsafeint32ToInt(header->size));
+    int metadata_sz = header_metainfo->metadata_sz;
+    int frames = header_metainfo->frame_count;
+    char (*fids)[4] = header_metainfo->fids;
 
-    fseek(f, 10, SEEK_SET);
-    int metadata_sz = get_metadata_size(f, header, synchsafeint32ToInt(header->size));
-    fseek(f, 10, SEEK_SET);
+    printf("Metadata Size: %d\n", metadata_sz);
+    printf("Frame Count: %d\n", frames);
+    printf("Frames: ");
+    for (int i = 0; i < frames; i++) printf("%.4s;", fids[i]);
+    printf("\n\n");
 
-    printf("%d\n", metadata_sz);
-
-    char *new_title = "Char";
-
-    int i = 0;
+    int bytes_read = 0; 
     char *data;
     char fid_str[5] = {'\0'};
-
-    // ISSUE, <metadata_sz> is variable when editing metadata
-    while (i < metadata_sz) {
+    for(int i = 0; i < frames; i++) {
         ID3V2_FRAME_HEADER frame_header;
         
         if (fread(frame_header.fid, 1, 4, f) != 4) {
@@ -139,9 +168,6 @@ int main(int argc, char *argv[]) {
         int frame_data_sz = synchsafeint32ToInt(frame_header.size);
         strncpy(fid_str, frame_header.fid, 4);
 
-        printf("FID: %.4s, ", fid_str);
-        printf("Size: %d\n", frame_data_sz);
-
         if (strncmp(fid_str, "TIT2", 4) == 0) {
             int l = strlen(new_title);
             char *synchsafe_l = intToSynchsafeint32(l+1);
@@ -157,7 +183,7 @@ int main(int argc, char *argv[]) {
             if (l > frame_data_sz-1) {
                 fseek(f, frame_data_sz-1, SEEK_CUR);
 
-                int buf_size = metadata_sz-(i+10+frame_data_sz);
+                int buf_size = metadata_sz-(bytes_read+10+frame_data_sz);
                 char *buf = malloc(buf_size);
                 fread(buf, 1, buf_size, f);
 
@@ -172,7 +198,7 @@ int main(int argc, char *argv[]) {
             } else {
                 fseek(f, frame_data_sz-1, SEEK_CUR);
 
-                int buf_size = metadata_sz-(i+10+frame_data_sz);
+                int buf_size = metadata_sz-(bytes_read+10+frame_data_sz);
                 char *buf = malloc(buf_size);
                 fread(buf, 1, buf_size, f);
                 fseek(f, -1*buf_size, SEEK_CUR);
@@ -198,11 +224,50 @@ int main(int argc, char *argv[]) {
             exit(1);
         }
 
-        if (strncmp(fid_str, "APIC", 4) != 0) {\
+        free(data);
+
+        bytes_read += 10 + frame_data_sz; 
+    }
+    
+    printf("Reading metadata:\n\n");
+    bytes_read = 0;
+
+    fseek(f, 10, SEEK_SET);
+    // Read Final Data
+    for (int i = 0; i < frames; i++) {
+        ID3V2_FRAME_HEADER frame_header;
+        
+        if (fread(frame_header.fid, 1, 4, f) != 4) {
+            printf("Error occurred reading file identifier.\n");
+            exit(1);
+        }
+        if (fread(frame_header.size, 1, 4, f) != 4) {
+            printf("Error occurred tag size.\n");
+            exit(1);
+        }
+        if (fread(frame_header.flags, 1, 2, f) != 2) {
+            printf("Error occurred flags.\n");
+            exit(1);
+        }
+        int frame_data_sz = synchsafeint32ToInt(frame_header.size);
+        strncpy(fid_str, frame_header.fid, 4);
+
+        printf("FID: %.4s, ", fid_str);
+        printf("Size: %d\n", frame_data_sz);
+
+        data = malloc(frame_data_sz+1);
+        data[frame_data_sz] = '\0';
+        
+        if (fread(data, 1, frame_data_sz, f) != frame_data_sz){
+            printf("Error occurred reading frame data.\n");
+            exit(1);
+        }
+
+        if (strncmp(fid_str, "APIC", 4) != 0) {
             // Printing char array with intermediate null chars
             printf("\tData: ");
-            for (int j = 0; j < frame_data_sz; j++) {
-                if (data[j] != '\0') printf("%c", data[j]);
+            for (int i = 0; i < frame_data_sz; i++) {
+                if (data[i] != '\0') printf("%c", data[i]);
             }
             printf("\n");
         }  
@@ -210,9 +275,9 @@ int main(int argc, char *argv[]) {
 
         free(data);
 
-        i += 10 + frame_data_sz; 
+        bytes_read += 10 + frame_data_sz; 
     }
-    
+
     free(header);
     fclose(f);
     return 0;

@@ -21,7 +21,7 @@ int synchsafeint32ToInt(char c[4]) {
 
 char *intToSynchsafeint32(int x) {
     char *ssint = malloc(4);
-    for (int i=0; i<4; i++) ssint[i] = (x & (0x7F << i*7)) >> i*7;
+    for (int i=0; i<4; i++) ssint[3-i] = (x & (0x7F << i*7)) >> i*7;
     return ssint;
 }
 
@@ -63,6 +63,31 @@ ID3V2_HEADER *read_header(FILE *f) {
     return header;
 }
 
+int get_metadata_size(FILE *f, ID3V2_HEADER *header, int metadata_alloc) {
+    int i = 0;
+    
+    while (i < metadata_alloc) {
+        ID3V2_FRAME_HEADER frame_header;
+        if (fread(frame_header.fid, 1, 4, f) != 4) {
+            printf("Error occurred reading file identifier.\n");
+            exit(1);
+        }
+
+        if (strlen(frame_header.fid) == 0) return i;
+
+        if (fread(frame_header.size, 1, 4, f) != 4) {
+            printf("Error occurred tag size.\n");
+            exit(1);
+        }
+        int frame_data_sz = synchsafeint32ToInt(frame_header.size);
+
+        fseek(f, 2+frame_data_sz, SEEK_CUR);
+        i += 4 + 4 + 2 + frame_data_sz;
+    }
+
+    return i;
+}
+
 int main(int argc, char *argv[]) {
     if (argc < 2) {
         printf("Invalid number of arguments.\n");
@@ -79,15 +104,24 @@ int main(int argc, char *argv[]) {
     printf("Mode: Reading metadata\n\n");
 
     ID3V2_HEADER *header = read_header(f);
-    int metadata_size = synchsafeint32ToInt(header->size);
+    int metadata_alloc = synchsafeint32ToInt(header->size);
     
     printf("Metadata found: \n");
+
+    fseek(f, 10, SEEK_SET);
+    int metadata_sz = get_metadata_size(f, header, synchsafeint32ToInt(header->size));
+    fseek(f, 10, SEEK_SET);
+
+    printf("%d\n", metadata_sz);
+
+    char *new_title = "Char";
 
     int i = 0;
     char *data;
     char fid_str[5] = {'\0'};
-    int tit2_pos = 0;
-    while (i < metadata_size) {
+
+    // ISSUE, <metadata_sz> is variable when editing metadata
+    while (i < metadata_sz) {
         ID3V2_FRAME_HEADER frame_header;
         
         if (fread(frame_header.fid, 1, 4, f) != 4) {
@@ -105,38 +139,80 @@ int main(int argc, char *argv[]) {
         int frame_data_sz = synchsafeint32ToInt(frame_header.size);
         strncpy(fid_str, frame_header.fid, 4);
 
-        if (frame_data_sz > 0) { 
-            printf("FID: %.4s, ", fid_str);
-            printf("Size: %d\n", frame_data_sz);
-            data = malloc(frame_data_sz+1);
-            data[frame_data_sz] = '\0';
-            
-            if (fread(data, 1, frame_data_sz, f) != frame_data_sz){
-                printf("Error occurred reading frame data.\n");
-                exit(1);
-            }
+        printf("FID: %.4s, ", fid_str);
+        printf("Size: %d\n", frame_data_sz);
 
-            if (strncmp(fid_str, "APIC", 4) != 0) {
-                
-                // Printing char array with intermediate null chars
-                printf("\tData: ");
-                for (int j = 0; j < frame_data_sz; j++) {
-                    if (data[j] != '\0') printf("%c", data[j]);
-                }
-                printf("\n");
-            }  
-            else printf("\tData is an image\n");
-        } else {
-            fseek(f, frame_data_sz, SEEK_CUR);    
+        if (strncmp(fid_str, "TIT2", 4) == 0) {
+            int l = strlen(new_title);
+            char *synchsafe_l = intToSynchsafeint32(l+1);
+            for (int i=0; i < 4; i++) {
+                printf("%d\n",synchsafe_l[i]);
+            }
+            fseek(f, -6, SEEK_CUR);
+            fwrite(synchsafe_l, 1, 4, f);
+            free(synchsafe_l);
+
+            fseek(f,2 + 1,SEEK_CUR); // Seek past constant first null byte
+
+            if (l > frame_data_sz-1) {
+                fseek(f, frame_data_sz-1, SEEK_CUR);
+
+                int buf_size = metadata_sz-(i+10+frame_data_sz);
+                char *buf = malloc(buf_size);
+                fread(buf, 1, buf_size, f);
+
+                fseek(f, -1*(buf_size + frame_data_sz - 1), SEEK_CUR);
+                fwrite(new_title, 1, strlen(new_title), f);
+                fwrite(buf, 1, buf_size, f);
+
+                fseek(f,-1*(buf_size + l + 1),SEEK_CUR);
+            } else if (l == frame_data_sz - 1) {
+                fwrite(new_title, 1, l, f);
+                fseek(f,-1*(l + 1),SEEK_CUR);
+            } else {
+                fseek(f, frame_data_sz-1, SEEK_CUR);
+
+                int buf_size = metadata_sz-(i+10+frame_data_sz);
+                char *buf = malloc(buf_size);
+                fread(buf, 1, buf_size, f);
+                fseek(f, -1*buf_size, SEEK_CUR);
+                char *emp_buf = calloc(buf_size, 1);
+                fwrite(emp_buf, 1, buf_size, f);
+
+                fseek(f, -1*(buf_size + frame_data_sz - 1), SEEK_CUR);
+                fwrite(new_title, 1, strlen(new_title), f);
+                fwrite(buf, 1, buf_size, f);
+
+                fseek(f,-1*(buf_size + l + 1),SEEK_CUR);
+            }
+            
+            frame_data_sz = l+1;
+            fflush(f);
+        }
+        
+        data = malloc(frame_data_sz+1);
+        data[frame_data_sz] = '\0';
+        
+        if (fread(data, 1, frame_data_sz, f) != frame_data_sz){
+            printf("Error occurred reading frame data.\n");
+            exit(1);
         }
 
+        if (strncmp(fid_str, "APIC", 4) != 0) {\
+            // Printing char array with intermediate null chars
+            printf("\tData: ");
+            for (int j = 0; j < frame_data_sz; j++) {
+                if (data[j] != '\0') printf("%c", data[j]);
+            }
+            printf("\n");
+        }  
+        else printf("\tData is an image\n");
+
+        free(data);
+
         i += 10 + frame_data_sz; 
-        if (frame_data_sz > 0)
-            printf("%d\n", i);
     }
-    fseek(f,181751,SEEK_SET);
-    char temp[7] = {'C', 'h', 'A','r','r','e','d'};
-    fwrite(temp, 1, 7, f);
+    
     free(header);
     fclose(f);
     return 0;

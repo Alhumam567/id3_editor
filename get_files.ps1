@@ -1,0 +1,1 @@
+get-childitem -Path ./ -Name -Attributes !D

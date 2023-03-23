@@ -1,6 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <getopt.h>
+#include <dirent.h>
+#include <sys/stat.h>
 
 typedef struct ID3V2_HEADER {
     char fid[3];
@@ -100,7 +103,7 @@ ID3_METAINFO *get_ID3_meta_info(FILE *f, ID3V2_HEADER *header, int metadata_allo
     ID3_METAINFO *info = malloc(sizeof(ID3_METAINFO));
     info->metadata_sz = sz;
     info->frame_count = frames;
-    info->fids = malloc(frames);
+    info->fids = malloc(frames*sizeof(char[4]));
 
     for (int i = 0; i < frames; i++) {
         if (fread(info->fids + i, 1, 4, f) != 4) {
@@ -120,13 +123,142 @@ ID3_METAINFO *get_ID3_meta_info(FILE *f, ID3V2_HEADER *header, int metadata_allo
     return info;
 }
 
-int main(int argc, char *argv[]) {
-    char *new_title = "Charred in the hot burning sun.";
-
+void parse_args(int argc, char *argv[], 
+                char ***path, 
+                char *(*edit_fids)[4],
+                char *(*edit_fids_str)[256],
+                int *is_dir) {
     if (argc < 2) {
         printf("Invalid number of arguments.\n");
         exit(1);
     }
+
+    int opt, strs = 0, errflag=0;
+    extern char *optarg;
+    extern int optind, optopt;
+
+    while((opt = getopt(argc, argv, "+a:b:n:t:")) != -1) {
+        switch(opt) {
+            case 'a':
+            case 'b':
+            case 't':
+                if (strlen(optarg) > 256) errflag++;
+                strs++;
+                break;
+            case 'n':
+                if (strncmp(optarg, "inc", 3) != 0 && strncmp(optarg, "dec", 3) != 0) errflag++;
+                strs++;
+                break;
+            case '?':
+                printf("Option \'%c\' is not recognized.\n", optopt);
+                errflag++;
+                break;
+            case ':':
+                printf("Option \'%c\' is missing an argument.\n", optopt);
+                errflag++;
+                break;
+        }
+    }
+
+    if (errflag) exit(1);
+
+    *edit_fids = malloc(sizeof(char[4])*strs);
+    *edit_fids_str = malloc(sizeof(char[256])*strs);
+    optind = 1;
+    int i = 0;
+
+    while((opt = getopt(argc, argv, "+a:b:n:t:")) != -1) {
+        switch(opt) {
+            case 'a':
+                (*edit_fids)[i] = "TPE1";
+                strncpy((*edit_fids_str)[i++],optarg,strlen(optarg));
+                break;
+            case 'b':
+                (*edit_fids)[i] = "TALB";
+                strncpy((*edit_fids_str)[i++],optarg,strlen(optarg));
+                break;
+            case 't':
+                (*edit_fids)[i] = "TIT2";
+                strncpy((*edit_fids_str)[i++],optarg,strlen(optarg));
+                break;
+            case 'n':
+                (*edit_fids)[i] = "TRCK";
+                strncpy((*edit_fids_str)[i++],optarg,strlen(optarg));
+                break;
+            case '?':
+                printf("Option \'%c\' is not recognized.\n", optopt);
+                errflag++;
+                break;
+            case ':':
+                printf("Option \'%c\' is missing an argument.\n", optopt);
+                errflag++;
+                break;
+        }
+    }
+
+    char *filepath;
+    if (optind == argc) {
+        printf("Missing path argument.\n");
+        exit(1);
+    } else {
+        filepath = argv[optind];
+    }
+
+    struct stat statbuf;
+    if (stat(filepath, &statbuf) != 0)
+        
+    if (S_ISDIR(statbuf.st_mode)) {
+        // FILE *p = popen("get_files.cmd", "r");
+        // printf("Directory:\n");
+        // if (p != NULL) {
+        //     while (1) {
+        //         char *line;
+        //         char buf[1000];
+        //         line = fgets(buf, sizeof buf, p);
+        //         if (line == NULL) break;
+        //         printf("%s", line);
+                
+        //     }
+        // }
+        *is_dir = 1;
+
+        DIR *dir = opendir(filepath);
+        struct dirent *entry;
+        int file_count;
+        int max_filename_len = 0;
+
+        while ((entry = readdir(dir)) != NULL) {
+            if (entry->d_type == DT_REG) file_count++;
+            if (strlen(entry->d_name) > max_filename_len) max_filename_len = strlen(entry->d_name);
+        }
+
+        *path = malloc(sizeof(char *)*file_count);
+        int j = 0;
+
+        for (; j < file_count; j++) 
+            (*path)[j] = malloc(max_filename_len + strlen(filepath));
+
+        rewinddir(dir);
+
+        while ((entry = readdir(dir)) != NULL) {
+            if (entry->d_type == DT_REG) 
+                (*path)[j++] = entry->d_name;
+        }
+    } else {
+        *is_dir = 0;
+
+        *path = malloc(sizeof(char *));
+        **path = malloc(strlen(filepath));
+        **path = filepath;
+    }
+}
+
+int main(int argc, char *argv[]) {
+    char **path;
+    char (*edit_fids)[4];
+    char (*edit_fids_str)[256];
+    int is_dir;
+    parse_args(argc, argv, &path, &edit_fids, &edit_fids_str, &is_dir);
 
     FILE *f = fopen(argv[1], "r+b");
 
@@ -233,6 +365,7 @@ int main(int argc, char *argv[]) {
     bytes_read = 0;
 
     fseek(f, 10, SEEK_SET);
+    
     // Read Final Data
     for (int i = 0; i < frames; i++) {
         ID3V2_FRAME_HEADER frame_header;

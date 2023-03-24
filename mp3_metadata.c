@@ -36,6 +36,15 @@ char *intToSynchsafeint32(int x) {
     return ssint;
 }
 
+char *concatenate(char *s1, char *s2) {
+    char *s3 = calloc(strlen(s1) + strlen(s2) + 1, 1);
+
+    strncat(s3, s1, strlen(s1));
+    strncat(s3, s2, strlen(s2));
+
+    return s3;
+}
+
 ID3V2_HEADER *read_header(FILE *f) {
     ID3V2_HEADER* header = malloc(sizeof(ID3V2_HEADER));
 
@@ -125,7 +134,7 @@ ID3_METAINFO *get_ID3_meta_info(FILE *f, ID3V2_HEADER *header, int metadata_allo
 }
 
 void parse_args(int argc, char *argv[], 
-                char ***path, 
+                char ***path, int *path_size, 
                 char (*edit_fids)[4][5],
                 char (*edit_fids_str)[4][256],
                 int *is_dir) {
@@ -142,27 +151,31 @@ void parse_args(int argc, char *argv[],
         switch(opt) {
             case 'a': // Artist name 
                 if (strlen(optarg) > 256) errflag++;
-                strncpy((*edit_fids_str)[0], optarg, strlen(optarg));
-
-                printf("Option detected: %s - %s", (*edit_fids)[0], (*edit_fids_str)[0]);
+                else {
+                    strncpy((*edit_fids_str)[0], optarg, strlen(optarg));
+                    printf("Option detected: %s - %s\n", (*edit_fids)[0], (*edit_fids_str)[0]);
+                }
                 break;
             case 'b': // Album name
                 if (strlen(optarg) > 256) errflag++;
-                strncpy((*edit_fids_str)[1], optarg, strlen(optarg));
-
-                printf("Option detected: %s - %s", (*edit_fids)[1], (*edit_fids_str)[1]);
+                else {
+                    strncpy((*edit_fids_str)[1], optarg, strlen(optarg));
+                    printf("Option detected: %s - %s\n", (*edit_fids)[1], (*edit_fids_str)[1]);
+                }
                 break;
             case 't': // Title
                 if (strlen(optarg) > 256) errflag++;
-                strncpy((*edit_fids_str)[2], optarg, strlen(optarg));
-
-                printf("Option detected: %s - %s", (*edit_fids)[2], (*edit_fids_str)[2]);
+                else {
+                    strncpy((*edit_fids_str)[2], optarg, strlen(optarg));   
+                    printf("Option detected: %s - %s\n", (*edit_fids)[2], (*edit_fids_str)[2]);
+                }
                 break;
             case 'n': // Track number
                 if (strncmp(optarg, "inc", 3) != 0 && strncmp(optarg, "dec", 3) != 0) errflag++;
-                strncpy((*edit_fids_str)[3], optarg, strlen(optarg));
-
-                printf("Option detected: %s - %s", (*edit_fids)[3], (*edit_fids_str)[3]);
+                else {
+                    strncpy((*edit_fids_str)[3], optarg, 3);
+                    printf("Option detected: %s - %s\n", (*edit_fids)[3], (*edit_fids_str)[3]);
+                }
                 break;
             case '?':
                 printf("Option \'%c\' is not recognized.\n", optopt);
@@ -186,7 +199,10 @@ void parse_args(int argc, char *argv[],
     }
 
     struct stat statbuf;
-    if (stat(filepath, &statbuf) != 0)
+    if (stat(filepath, &statbuf) != 0) {
+        printf("Error reading input path file %s, errno: %d", filepath, errno);
+        exit(1);
+    }
         
     if (S_ISDIR(statbuf.st_mode)) {
         *is_dir = 1;
@@ -198,49 +214,73 @@ void parse_args(int argc, char *argv[],
         int max_filename_len = 0;
 
         while ((entry = readdir(dir)) != NULL) {
-            char *fullpath = malloc(strlen(filepath) + strlen(entry->d_name) + 1);
-            strncat(fullpath,filepath,strlen(filepath));
-            strncat(fullpath,entry->d_name,strlen(entry->d_name));
-            item_dir = opendir(fullpath);
-            free(fullpath);
-            if (opendir(fullpath) == NULL && errno == ENOENT) file_count++;
+            char *full_path = concatenate(filepath, entry->d_name);
+            printf("%s\n", filepath);
+            printf("%s\n", entry->d_name);
+            
+            if (stat(full_path, &statbuf) != 0) {
+                free(full_path);
+                printf("Error reading input dir file %s, errno: %d", full_path, errno);
+                exit(1);
+            } else if (S_ISREG(statbuf.st_mode)) {
+                file_count++;
+            }
             if (strlen(entry->d_name) > max_filename_len) max_filename_len = strlen(entry->d_name);
+            
+            free(full_path);
         }
 
         *path = malloc(sizeof(char *)*file_count);
         int j = 0;
+        *path_size = file_count;
 
         for (; j < file_count; j++) 
-            (*path)[j] = malloc(max_filename_len + strlen(filepath));
+            (*path)[j] = calloc(max_filename_len + strlen(filepath), 1);
 
         rewinddir(dir);
 
+        j = 0;
         while ((entry = readdir(dir)) != NULL) {
-            char *fullpath = malloc(strlen(filepath) + strlen(entry->d_name) + 1);
-            strncat(fullpath,filepath,strlen(filepath));
-            strncat(fullpath,entry->d_name,strlen(entry->d_name));
-            item_dir = opendir(fullpath);
-            free(fullpath); 
+            char *full_path = concatenate(filepath, entry->d_name);
 
-            if (opendir(fullpath) == NULL && errno == ENOENT)
-                (*path)[j++] = entry->d_name;
+            if (stat(full_path, &statbuf) != 0) {
+                free(full_path);
+                printf("Error reading input dir file %s, errno: %d", full_path, errno);
+                exit(1);
+            } else if (S_ISREG(statbuf.st_mode)) {
+                strncpy((*path)[j++], full_path, strlen(full_path));
+            }
+
+            free(full_path); 
         }
     } else {
         *is_dir = 0;
+        *path_size = 1;
 
         *path = malloc(sizeof(char *));
         **path = malloc(strlen(filepath));
         **path = filepath;
     }
+
+    printf("\n");
 }
 
 int main(int argc, char *argv[]) {
     char **path;
     char edit_fids[4][5] = { "TPE1", "TALB", "TIT2", "TRCK" };
     char edit_fids_str[4][256] = {'\0'};
-    int is_dir;
-    parse_args(argc, argv, &path, &edit_fids, &edit_fids_str, &is_dir);
+    int is_dir, path_size;
+    parse_args(argc, argv, &path, &path_size, &edit_fids, &edit_fids_str, &is_dir);
 
+    printf("Paths: %d\n", path_size);
+    for (int i = 0; i < path_size; i++) {
+        printf("%s\n", path[i]);
+    }
+    printf("Editing strings: \n");
+    for (int i = 0; i < 4; i++) {
+        printf("%s\n", edit_fids_str[i]);
+    }
+    printf("is_dir: %d\n", is_dir);
     // FILE *f = fopen(argv[1], "r+b");
 
     // if (f == NULL) {

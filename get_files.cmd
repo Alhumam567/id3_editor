@@ -1,1 +1,0 @@
-powerShell ./get_files.ps1

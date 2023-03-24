@@ -2,3 +2,4 @@
 *.exe
 *.mp3
 misc/
+.vscode

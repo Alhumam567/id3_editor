@@ -5,6 +5,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <sys/stat.h>
+#include "util.c"
 
 typedef struct ID3V2_HEADER {
     char fid[3];
@@ -26,24 +27,6 @@ typedef struct ID3_METAINFO {
 } ID3_METAINFO;
 
 
-int synchsafeint32ToInt(char c[4]) {
-    return (c[0] << 21) | ((c[1] << 14) | ((c[2] << 7) | (c[3] | (int)0)));
-}
-
-char *intToSynchsafeint32(int x) {
-    char *ssint = malloc(4);
-    for (int i=0; i<4; i++) ssint[3-i] = (x & (0x7F << i*7)) >> i*7;
-    return ssint;
-}
-
-char *concatenate(char *s1, char *s2) {
-    char *s3 = calloc(strlen(s1) + strlen(s2) + 1, 1);
-
-    strncat(s3, s1, strlen(s1));
-    strncat(s3, s2, strlen(s2));
-
-    return s3;
-}
 
 ID3V2_HEADER *read_header(FILE *f) {
     ID3V2_HEADER* header = malloc(sizeof(ID3V2_HEADER));
@@ -82,6 +65,8 @@ ID3V2_HEADER *read_header(FILE *f) {
 
     return header;
 }
+
+
 
 ID3_METAINFO *get_ID3_meta_info(FILE *f, ID3V2_HEADER *header, int metadata_alloc) {
     fseek(f, 10, SEEK_SET);
@@ -132,6 +117,8 @@ ID3_METAINFO *get_ID3_meta_info(FILE *f, ID3V2_HEADER *header, int metadata_allo
     fseek(f, 10, SEEK_SET);
     return info;
 }
+
+
 
 void parse_args(int argc, char *argv[], 
                 char ***path, int *path_size, 
@@ -196,7 +183,6 @@ void parse_args(int argc, char *argv[],
         exit(1);
     } else {
         filepath = argv[optind];
-        printf("Filepath: %s\n", filepath);
     }
 
     struct stat statbuf;
@@ -271,22 +257,33 @@ void parse_args(int argc, char *argv[],
     printf("\n");
 }
 
+
+
+void free_data(ID3V2_HEADER *header, ID3_METAINFO *meta_info, char **path) {
+    
+}
+
+
+
 int main(int argc, char *argv[]) {
     char **path;
     char edit_fids[4][5] = { "TPE1", "TALB", "TIT2", "TRCK" };
     char edit_fids_str[4][256] = {'\0'};
     int is_dir, path_size;
+
     parse_args(argc, argv, &path, &path_size, &edit_fids, &edit_fids_str, &is_dir);
 
-    printf("Paths: %d\n", path_size);
+    printf("Configuration: \n");
+    printf("\tEditing Files: %d\n", path_size);
     for (int i = 0; i < path_size; i++) {
-        printf("%s\n", path[i]);
+        printf("\t\t%d. %s\n", i+1, path[i]);
     }
-    printf("Editing strings: \n");
+    printf("\tEditing strings: \n");
     for (int i = 0; i < 4; i++) {
-        printf("%s\n", edit_fids_str[i]);
+        printf("\t\t%s: %s\n", edit_fids[i], edit_fids_str[i]);
     }
-    printf("is_dir: %d\n", is_dir);
+    printf("\tis_dir: %d\n", is_dir);
+
     FILE *f = fopen(argv[1], "r+b");
 
     if (f == NULL) {
@@ -441,6 +438,7 @@ int main(int argc, char *argv[]) {
     }
 
     free(header);
+    free_data(header, header_metainfo, path);
     fclose(f);
     return 0;
 }

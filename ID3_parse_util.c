@@ -1,6 +1,6 @@
 #include "mp3_metadata.h"
 
-ID3V2_HEADER *read_header(FILE *f) {
+ID3V2_HEADER *read_header(FILE *f, char *filename) {
     ID3V2_HEADER* header = malloc(sizeof(ID3V2_HEADER));
 
     if (fread(header->fid, 1, 3, f) != 3) {
@@ -25,7 +25,7 @@ ID3V2_HEADER *read_header(FILE *f) {
 
     int metadata_size = synchsafeint32ToInt(header->size);
 
-    printf("Header: \n");
+    printf("%s Header: \n", filename);
     printf("\tFile Identifier: %c%c%c\n", header->fid[0], header->fid[1], header->fid[2]);
     printf("\tVersion: 2.%d.%d\n", header->ver[0], header->ver[1]);
     printf("\tFlags:\n");
@@ -70,10 +70,11 @@ ID3_METAINFO *get_ID3_meta_info(FILE *f, ID3V2_HEADER *header, int metadata_allo
     ID3_METAINFO *info = malloc(sizeof(ID3_METAINFO));
     info->metadata_sz = sz;
     info->frame_count = frames;
-    info->fids = malloc(frames*sizeof(char[4]));
+    info->fids = calloc(frames, sizeof(char *));
 
     for (int i = 0; i < frames; i++) {
-        if (fread(info->fids + i, 1, 4, f) != 4) {
+        info->fids[i] = calloc(1, 5);
+        if (fread(info->fids[i], 1, 4, f) != 4) {
             printf("Error occurred reading file identifier.\n");
             exit(1);
         }

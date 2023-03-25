@@ -169,6 +169,22 @@ void free_arg_data(char **path, int path_size) {
 
 
 
+int write_new_len(int new_len, FILE *f, int verbose) {
+    char synchsafe_nl[4];
+    intToSynchsafeint32(new_len + 1, synchsafe_nl);
+    
+    if (verbose) {
+        for (int i=0; i < 4; i++)
+            printf("%d\n",synchsafe_nl[i]);
+    }
+    
+    fwrite(synchsafe_nl, 1, 4, f);
+
+    return new_len;
+}
+
+
+
 void print_data(FILE *f, int frames) {
     int bytes_read = 0; 
     char *data;
@@ -244,123 +260,108 @@ int main(int argc, char *argv[]) {
     }
     printf("\tis_dir: %d\n\n", is_dir);
 
+
+
     for (int id = 0; id < path_size; id++) {
         FILE *f = fopen(path[id], "r+b");
+        
         if (f == NULL) {
             printf("File does not exist.\n");
             exit(1);
         }
 
-        ID3V2_HEADER *header = read_header(f, path[id]);
-        ID3_METAINFO *header_metainfo = get_ID3_meta_info(f, header, synchsafeint32ToInt(header->size));
-        
-        int metadata_sz = header_metainfo->metadata_sz;
-        int frames = header_metainfo->frame_count;
-        char **fids = header_metainfo->fids;
+        ID3V2_HEADER header;
+        read_header(&header, f, path[id], 1);
 
-        char *new_title = edit_fids_str[2];
-    
-        printf("Metadata Size: %d\n", metadata_sz);
-        printf("Frame Count: %d\n", frames);
-        printf("Frames: ");
-        for (int i = 0; i < frames; i++) printf("%s;", fids[i]);
-        printf("\n\n");
+        ID3_METAINFO header_metainfo;
+        get_ID3_meta_info(&header_metainfo, &header, synchsafeint32ToInt(header.size), f, 1);
+        
+
+        // Search and edit existing FIDs
+        int bytes_read = 0; 
+        char *data;
+        char fid_str[5] = {'\0'};
+        for(int i = 0; i < header_metainfo.frame_count; i++) {
+            ID3V2_FRAME_HEADER frame_header;
+            read_frame_header(&frame_header, f);    
+            
+            int frame_data_sz = synchsafeint32ToInt(frame_header.size);
+            strncpy(fid_str, frame_header.fid, 4);
+
+            for (int j = 0; j < 4; j++) {
+                if (edit_fids_str[j][0] != '\0') {
+                    fseek(f, -6, SEEK_CUR); // Seek back to frame header size 
+                    int new_len = write_new_len(strlen(edit_fids_str[j]), f, 0);
+
+                    fseek(f,2 + 1,SEEK_CUR); // Seek past flag and constant first null byte
+
+                    // if (new_len > frame_data_sz-1) {
+                    //     fseek(f, frame_data_sz-1, SEEK_CUR);
+
+                    //     int buf_size = metadata_sz-(bytes_read+10+frame_data_sz);
+                    //     char *buf = malloc(buf_size);
+                    //     fread(buf, 1, buf_size, f);
+
+                    //     fseek(f, -1*(buf_size + frame_data_sz - 1), SEEK_CUR);
+                    //     fwrite(new_title, 1, strlen(new_title), f);
+                    //     fwrite(buf, 1, buf_size, f);
+
+                    //     fseek(f,-1*(buf_size + l + 1),SEEK_CUR);
+                    // }
+                }
+            }
+
+            
+                
+                
+                
+
+            
+
+            //      else if (l == frame_data_sz - 1) {
+            //         fwrite(new_title, 1, l, f);
+            //         fseek(f,-1*(l + 1),SEEK_CUR);
+            //     } else {
+            //         fseek(f, frame_data_sz-1, SEEK_CUR);
+
+            //         int buf_size = metadata_sz-(bytes_read+10+frame_data_sz);
+            //         char *buf = malloc(buf_size);
+            //         fread(buf, 1, buf_size, f);
+            //         fseek(f, -1*buf_size, SEEK_CUR);
+            //         char *emp_buf = calloc(buf_size, 1);
+            //         fwrite(emp_buf, 1, buf_size, f);
+
+            //         fseek(f, -1*(buf_size + frame_data_sz - 1), SEEK_CUR);
+            //         fwrite(new_title, 1, strlen(new_title), f);
+            //         fwrite(buf, 1, buf_size, f);
+
+            //         fseek(f,-1*(buf_size + l + 1),SEEK_CUR);
+            //     }
+                
+            //     frame_data_sz = l+1;
+            //     fflush(f);
+            // }
+            
+            data = malloc(frame_data_sz+1);
+            data[frame_data_sz] = '\0';
+            
+            if (fread(data, 1, frame_data_sz, f) != frame_data_sz){
+                printf("Error occurred reading frame data.\n");
+                exit(1);
+            }
+
+            free(data);
+
+            bytes_read += 10 + frame_data_sz; 
+        }
+        
+        printf("Reading %s metadata :\n\n", path[id]);
+        print_data(f, header_metainfo.frame_count);
 
         fclose(f);
-        free_id3_data(header, header_metainfo);
     }
 
     free_arg_data(path, path_size);
-
-    // int bytes_read = 0; 
-    // char *data;
-    // char fid_str[5] = {'\0'};
-    // for(int i = 0; i < frames; i++) {
-    //     ID3V2_FRAME_HEADER frame_header;
-        
-    //     if (fread(frame_header.fid, 1, 4, f) != 4) {
-    //         printf("Error occurred reading file identifier.\n");
-    //         exit(1);
-    //     }
-    //     if (fread(frame_header.size, 1, 4, f) != 4) {
-    //         printf("Error occurred tag size.\n");
-    //         exit(1);
-    //     }
-    //     if (fread(frame_header.flags, 1, 2, f) != 2) {
-    //         printf("Error occurred flags.\n");
-    //         exit(1);
-    //     }
-    //     int frame_data_sz = synchsafeint32ToInt(frame_header.size);
-    //     strncpy(fid_str, frame_header.fid, 4);
-
-    //     if (strncmp(fid_str, "TIT2", 4) == 0) {
-    //         int l = strlen(new_title);
-    //         char *synchsafe_l = intToSynchsafeint32(l+1);
-    //         for (int i=0; i < 4; i++) {
-    //             printf("%d\n",synchsafe_l[i]);
-    //         }
-    //         fseek(f, -6, SEEK_CUR);
-    //         fwrite(synchsafe_l, 1, 4, f);
-    //         free(synchsafe_l);
-
-    //         fseek(f,2 + 1,SEEK_CUR); // Seek past constant first null byte
-
-    //         if (l > frame_data_sz-1) {
-    //             fseek(f, frame_data_sz-1, SEEK_CUR);
-
-    //             int buf_size = metadata_sz-(bytes_read+10+frame_data_sz);
-    //             char *buf = malloc(buf_size);
-    //             fread(buf, 1, buf_size, f);
-
-    //             fseek(f, -1*(buf_size + frame_data_sz - 1), SEEK_CUR);
-    //             fwrite(new_title, 1, strlen(new_title), f);
-    //             fwrite(buf, 1, buf_size, f);
-
-    //             fseek(f,-1*(buf_size + l + 1),SEEK_CUR);
-    //         } else if (l == frame_data_sz - 1) {
-    //             fwrite(new_title, 1, l, f);
-    //             fseek(f,-1*(l + 1),SEEK_CUR);
-    //         } else {
-    //             fseek(f, frame_data_sz-1, SEEK_CUR);
-
-    //             int buf_size = metadata_sz-(bytes_read+10+frame_data_sz);
-    //             char *buf = malloc(buf_size);
-    //             fread(buf, 1, buf_size, f);
-    //             fseek(f, -1*buf_size, SEEK_CUR);
-    //             char *emp_buf = calloc(buf_size, 1);
-    //             fwrite(emp_buf, 1, buf_size, f);
-
-    //             fseek(f, -1*(buf_size + frame_data_sz - 1), SEEK_CUR);
-    //             fwrite(new_title, 1, strlen(new_title), f);
-    //             fwrite(buf, 1, buf_size, f);
-
-    //             fseek(f,-1*(buf_size + l + 1),SEEK_CUR);
-    //         }
-            
-    //         frame_data_sz = l+1;
-    //         fflush(f);
-    //     }
-        
-    //     data = malloc(frame_data_sz+1);
-    //     data[frame_data_sz] = '\0';
-        
-    //     if (fread(data, 1, frame_data_sz, f) != frame_data_sz){
-    //         printf("Error occurred reading frame data.\n");
-    //         exit(1);
-    //     }
-
-    //     free(data);
-
-    //     bytes_read += 10 + frame_data_sz; 
-    // }
-    
-    // printf("Reading metadata:\n\n");
-    // bytes_read = 0;
-
-    // print_data(f, frames);
-
-
-    // fclose(f);
 
     return 0;
 }

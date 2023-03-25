@@ -1,8 +1,6 @@
 #include "mp3_metadata.h"
 
-ID3V2_HEADER *read_header(FILE *f, char *filename) {
-    ID3V2_HEADER* header = malloc(sizeof(ID3V2_HEADER));
-
+ID3V2_HEADER *read_header(ID3V2_HEADER *header, FILE *f, char *filename, int verbose) {
     if (fread(header->fid, 1, 3, f) != 3) {
         printf("Error occurred reading file identifier.\n");
         exit(1);
@@ -25,22 +23,43 @@ ID3V2_HEADER *read_header(FILE *f, char *filename) {
 
     int metadata_size = synchsafeint32ToInt(header->size);
 
-    printf("%s Header: \n", filename);
-    printf("\tFile Identifier: %c%c%c\n", header->fid[0], header->fid[1], header->fid[2]);
-    printf("\tVersion: 2.%d.%d\n", header->ver[0], header->ver[1]);
-    printf("\tFlags:\n");
-    printf("\t\tUnsynchronisation: %d\n", header->flags >> 7);
-    printf("\t\tExtended Header: %d\n", header->flags >> 6);
-    printf("\t\tExp. Indicator: %d\n", header->flags >> 5);
-    printf("\t\tFooter present: %d\n", header->flags >> 4);
-    printf("\tTag Size: %d\n\n", metadata_size);
+    if (verbose) {
+        printf("%s Header: \n", filename);
+        printf("\tFile Identifier: %c%c%c\n", header->fid[0], header->fid[1], header->fid[2]);
+        printf("\tVersion: 2.%d.%d\n", header->ver[0], header->ver[1]);
+        printf("\tFlags:\n");
+        printf("\t\tUnsynchronisation: %d\n", header->flags >> 7);
+        printf("\t\tExtended Header: %d\n", header->flags >> 6);
+        printf("\t\tExp. Indicator: %d\n", header->flags >> 5);
+        printf("\t\tFooter present: %d\n", header->flags >> 4);
+        printf("\tTag Size: %d\n\n", metadata_size);
+    }
 
     return header;
 }
 
 
 
-ID3_METAINFO *get_ID3_meta_info(FILE *f, ID3V2_HEADER *header, int metadata_alloc) {
+ID3V2_FRAME_HEADER *read_frame_header(ID3V2_FRAME_HEADER *h, FILE *f) {
+    if (fread(h->fid, 1, 4, f) != 4) {
+        printf("Error occurred reading file identifier.\n");
+        exit(1);
+    }
+    if (fread(h->size, 1, 4, f) != 4) {
+        printf("Error occurred tag size.\n");
+        exit(1);
+    }
+    if (fread(h->flags, 1, 2, f) != 2) {
+        printf("Error occurred flags.\n");
+        exit(1);
+    }
+
+    return h;
+}
+
+
+
+ID3_METAINFO *get_ID3_meta_info(ID3_METAINFO *metainfo, ID3V2_HEADER *header, int metadata_alloc, FILE *f, int verbose) {
     fseek(f, 10, SEEK_SET);
     int sz = 0;
     int frames = 0;
@@ -67,14 +86,13 @@ ID3_METAINFO *get_ID3_meta_info(FILE *f, ID3V2_HEADER *header, int metadata_allo
 
     fseek(f, 10, SEEK_SET);
 
-    ID3_METAINFO *info = malloc(sizeof(ID3_METAINFO));
-    info->metadata_sz = sz;
-    info->frame_count = frames;
-    info->fids = calloc(frames, sizeof(char *));
+    metainfo->metadata_sz = sz;
+    metainfo->frame_count = frames;
+    metainfo->fids = calloc(frames, sizeof(char *));
 
     for (int i = 0; i < frames; i++) {
-        info->fids[i] = calloc(1, 5);
-        if (fread(info->fids[i], 1, 4, f) != 4) {
+        metainfo->fids[i] = calloc(1, 5);
+        if (fread(metainfo->fids[i], 1, 4, f) != 4) {
             printf("Error occurred reading file identifier.\n");
             exit(1);
         }
@@ -87,6 +105,14 @@ ID3_METAINFO *get_ID3_meta_info(FILE *f, ID3V2_HEADER *header, int metadata_allo
         fseek(f, 2 + frame_data_sz, SEEK_CUR);
     }
 
+    if (verbose) {
+        printf("Metadata Size: %d\n", metainfo->metadata_sz);
+        printf("Frame Count: %d\n", metainfo->frame_count);
+        printf("Frames: ");
+        for (int i = 0; i < metainfo->frame_count; i++) printf("%s;", metainfo->fids[i]);
+        printf("\n\n");
+    }
+
     fseek(f, 10, SEEK_SET);
-    return info;
+    return metainfo;
 }

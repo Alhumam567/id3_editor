@@ -2,9 +2,8 @@ int synchsafeint32ToInt(char c[4]) {
     return (c[0] << 21) | ((c[1] << 14) | ((c[2] << 7) | (c[3] | (int)0)));
 }
 
-char *intToSynchsafeint32(int x) {
-    char *ssint = malloc(4);
-    for (int i=0; i<4; i++) ssint[3-i] = (x & (0x7F << i*7)) >> i*7;
+char **intToSynchsafeint32(int x, char **ssint) {
+    for (int i=0; i<4; i++) (*ssint)[3-i] = (x & (0x7F << i*7)) >> i*7;
     return ssint;
 }
 

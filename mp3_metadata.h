@@ -22,4 +22,8 @@ typedef struct ID3_METAINFO {
     char **fids;
 } ID3_METAINFO;
 
+typedef struct dsarray {
+    char str[5];
+} ARR;
+
 #endif

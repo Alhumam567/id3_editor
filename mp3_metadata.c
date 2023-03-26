@@ -171,6 +171,22 @@ int get_fid_index(char *(fids[4]), int fids_len, char *fid) {
 
 
 
+void free_fid_data(char **fids, char **fid_data, int fid_len) {
+    for (int i = 0; i < fid_len; i++) {
+        free(fids[i]);
+    }
+
+    free(fids);
+
+    for (int i = 0; i < fid_len; i++) {
+        free(fid_data[i]);
+    }
+
+    free(fid_data);
+}
+
+
+
 void free_arg_data(char **path, int path_size) {
     for (int i = 0; i < path_size; i++) {
         free(path[i]);
@@ -230,9 +246,7 @@ int main(int argc, char *argv[]) {
 
             if (fid_index != -1 && new_fid_data[fid_index][0] != '\0') {
                 fseek(f, -6, SEEK_CUR); // Seek back to frame header size 
-
                 len_data = write_new_len(strlen(new_fid_data[fid_index]), f, 0);
-
                 fseek(f, 2 + 1, SEEK_CUR); // Seek past flag and constant first null byte
 
                 int remaining_metadata_sz = header_metainfo.metadata_sz - (bytes_read + 10);
@@ -245,9 +259,11 @@ int main(int argc, char *argv[]) {
         printf("Reading %s metadata :\n\n", path[id]);
         print_data(f, header_metainfo.frame_count);
 
+
         fclose(f);
     }
 
+    free_fid_data(editable_fid, new_fid_data, fid_len);
     free_arg_data(path, path_size);
 
     return 0;

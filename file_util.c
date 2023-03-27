@@ -9,7 +9,14 @@ int get_frame_data_len(ID3V2_FRAME_HEADER h) {
 }
 
 
-
+/**
+ * @brief 
+ * 
+ * @param new_len 
+ * @param f 
+ * @param verbose 
+ * @return int 
+ */
 int write_new_len(int new_len, FILE *f, int verbose) {
     char synchsafe_nl[4];
     intToSynchsafeint32(new_len + 1, synchsafe_nl);

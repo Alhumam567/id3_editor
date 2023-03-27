@@ -3,6 +3,10 @@
 
 #include <stdio.h>
 
+#define FID_LEN 4
+
+char fids[FID_LEN][5] = {"TPE1", "TALB", "TIT2", "TRCK"};
+
 typedef struct ID3V2_HEADER {
     char fid[3];
     char ver[2];

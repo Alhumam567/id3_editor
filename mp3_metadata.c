@@ -11,60 +11,79 @@
 #include "file_util.c"
 
 
+/**
+ * @brief Parses command-line arguments to retrieve new frame data and list of files to edit
+ * Allocates memory for required for string of filepaths and returns the amount of files for editing
+ * in <path_size>. 
+ * 
+ * @param argc - Command-line argument count 
+ * @param argv - Command-line arguments
+ * @param edit_fids - Array of frame ID strings
+ * @param edit_fids_str - Array of respective frame data for frame IDs 
+ * @param fid_len - Count of editable frame IDs  
+ * @param path - Pointer to array of variable length strings that are paths of files to be edited
+ * @param path_size - Int pointer containing count of files to be edited
+ * @param is_dir - Is filepath argument a directory
+ */
 void parse_args(int argc, char *argv[], 
-                char ***path, int *path_size, 
-                char ***edit_fids,
-                char ***edit_fids_str,
-                int *fid_len,
+                char edit_fids[FID_LEN][5],
+                char edit_fids_str[FID_LEN][256],
+                int fid_len,
+                int *write_trck_num,
+                char ***path, 
+                int *path_size,
                 int *is_dir) {
+    
+    //File or Dir path is required at minimum
     if (argc < 2) {
         printf("Invalid number of arguments.\n");
         exit(1);
     }
 
-    char temp[4][5] = {"TPE1", "TALB", "TIT2", "TRCK"};
-    *fid_len = 4;
-    *edit_fids = calloc(*fid_len, sizeof(char [5]));
-    for (int i = 0; i < *fid_len; i++) {
-        (*edit_fids)[i] = calloc(1, sizeof(char [5]));
-        strncpy((*edit_fids)[i], temp[i], 4);
-    }
-    *edit_fids_str = calloc(*fid_len, sizeof(char [256]));
-    for (int i = 0; i < *fid_len; i++) (*edit_fids_str)[i] = calloc(1, sizeof(char [256]));
-
     int opt, errflag=0;
     extern char *optarg;
     extern int optind, optopt;
 
-    while((opt = getopt(argc, argv, "+a:b:n:t:")) != -1) {
+    while((opt = getopt(argc, argv, "+a:b:t:nh")) != -1) {
         switch(opt) {
-            case 'a': // Artist name 
+            case 'a': // TPE1: Artist name 
                 if (strlen(optarg) > 256) errflag++;
                 else {
-                    strncpy((*edit_fids_str)[0], optarg, strlen(optarg));
-                    printf("Option detected: %s - %s\n", edit_fids[0], (*edit_fids_str)[0]);
+                    strncpy(edit_fids_str[0], optarg, strlen(optarg));
+                    printf("Option detected: %s - %s\n", edit_fids[0], edit_fids_str[0]);
                 }
                 break;
-            case 'b': // Album name
+            case 'b': // TALB: Album name
                 if (strlen(optarg) > 256) errflag++;
                 else {
-                    strncpy((*edit_fids_str)[1], optarg, strlen(optarg));
-                    printf("Option detected: %s - %s\n", edit_fids[1], (*edit_fids_str)[1]);
+                    strncpy(edit_fids_str[1], optarg, strlen(optarg));
+                    printf("Option detected: %s - %s\n", edit_fids[1], edit_fids_str[1]);
                 }
                 break;
-            case 't': // Title
+            case 't': // TIT2: Title
                 if (strlen(optarg) > 256) errflag++;
                 else {
-                    strncpy((*edit_fids_str)[2], optarg, strlen(optarg));   
-                    printf("Option detected: %s - %s\n", edit_fids[2], (*edit_fids_str)[2]);
+                    strncpy(edit_fids_str[2], optarg, strlen(optarg));   
+                    printf("Option detected: %s - %s\n", edit_fids[2], edit_fids_str[2]);
                 }
                 break;
-            case 'n': // Track number
+            case 'n': // TRCK: Track number
                 if (strncmp(optarg, "inc", 3) != 0 && strncmp(optarg, "dec", 3) != 0) errflag++;
                 else {
-                    strncpy((*edit_fids_str)[3], optarg, 3);
-                    printf("Option detected: %s - %s\n", edit_fids[3], (*edit_fids_str)[3]);
+                    strncpy(edit_fids_str[3], optarg, 3);
+                    printf("Option detected: %s - %s\n", edit_fids[3], edit_fids_str[3]);
                 }
+                break;
+            case 'h':
+                printf("Usage: ./mp3.exe [OPTION]... PATH\n");
+                printf("Reads and edits ID3 metadata tags.\n");
+                printf("Options:\n");
+                printf("\t-a ARTIST, \tWrite new artist name ARTIST for all files in path\n");
+                printf("\t-b ALBUM, \tWrite new album name ALBUM for all files in path\n");
+                printf("\t-t TITLE, \tWrite new title(s) for all files in path. If PATH contains more than one file, TITLE can contain an equivalent number of titles, separated by commas.\n");
+                printf("\t-n, \tWrite track number for all files in path. If this option is selected, the track number for the file must be contained in beginning of the filename.\n");
+
+                exit(0);
                 break;
             case '?':
                 printf("Option \'%c\' is not recognized.\n", optopt);
@@ -79,6 +98,7 @@ void parse_args(int argc, char *argv[],
 
     if (errflag) exit(1);
 
+    // Read filepath argument
     char *filepath;
     if (optind == argc) {
         printf("Missing path argument.\n");
@@ -87,12 +107,14 @@ void parse_args(int argc, char *argv[],
         filepath = argv[optind];
     }
 
-    struct stat statbuf;
+    // POSIX Compliant file info retrieval
+    struct stat statbuf; 
     if (stat(filepath, &statbuf) != 0) {
         printf("Error reading input path file %s, errno: %d", filepath, errno);
         exit(1);
     }
         
+    // If filepath arg is a DIR, retrieve all child filepaths for editing
     if (S_ISDIR(statbuf.st_mode)) {
         *is_dir = 1;
 
@@ -106,6 +128,7 @@ void parse_args(int argc, char *argv[],
         strncpy(filepath_prefix, filepath, strlen(filepath));
         filepath_prefix[strlen(filepath)] = '\\';
 
+        // Count number of files in DIR and find longest length filename
         while ((entry = readdir(dir)) != NULL) {
             char *full_path = concatenate(filepath_prefix, entry->d_name);
             
@@ -122,6 +145,7 @@ void parse_args(int argc, char *argv[],
             free(full_path);
         }
 
+        // Allocate memory for all filepaths
         *path = malloc(sizeof(char *)*file_count);
         int j = 0;
         *path_size = file_count;
@@ -130,8 +154,9 @@ void parse_args(int argc, char *argv[],
             (*path)[j] = calloc(max_filename_len + strlen(filepath), 1);
 
         rewinddir(dir);
-
         j = 0;
+
+        // Save filepaths into <path>
         while ((entry = readdir(dir)) != NULL) {
             char *full_path = concatenate(filepath_prefix, entry->d_name);
 
@@ -147,7 +172,7 @@ void parse_args(int argc, char *argv[],
         }
 
         free(filepath_prefix);
-    } else {
+    } else { // Filepath argument is a file
         *is_dir = 0;
         *path_size = 1;
 
@@ -161,7 +186,15 @@ void parse_args(int argc, char *argv[],
 
 
 
-int get_fid_index(char *(fids[4]), int fids_len, char *fid) {
+/**
+ * @brief Reverse lookup for frame ID to index
+ * 
+ * @param fids - Array of frame IDs
+ * @param fids_len - Count of frame IDs
+ * @param fid - Frame ID string
+ * @return int - Index of given frame ID
+ */
+int get_fid_index(char fids[FID_LEN][5], int fids_len, char *fid) {
     for (int i = 0; i < fids_len; i++) {
         if (strncmp(fids[i], fid, 4) == 0) return i;
     }
@@ -170,23 +203,12 @@ int get_fid_index(char *(fids[4]), int fids_len, char *fid) {
 }
 
 
-
-void free_fid_data(char **fids, char **fid_data, int fid_len) {
-    for (int i = 0; i < fid_len; i++) {
-        free(fids[i]);
-    }
-
-    free(fids);
-
-    for (int i = 0; i < fid_len; i++) {
-        free(fid_data[i]);
-    }
-
-    free(fid_data);
-}
-
-
-
+/**
+ * @brief Free 2D dynamically allocated filepaths array
+ * 
+ * @param path - Pointer to filepath strings
+ * @param path_size - Filepaths count
+ */
 void free_arg_data(char **path, int path_size) {
     for (int i = 0; i < path_size; i++) {
         free(path[i]);
@@ -199,11 +221,11 @@ void free_arg_data(char **path, int path_size) {
 
 int main(int argc, char *argv[]) {
     char **path;
-    char **editable_fid;
-    char **new_fid_data;
-    int fid_len, is_dir, path_size;
+    extern char fids[FID_LEN][5];
+    char new_fid_data[FID_LEN][256] = {'\0'};
+    int is_dir, path_size, write_trck_num;
 
-    parse_args(argc, argv, &path, &path_size, &editable_fid, &new_fid_data, &fid_len, &is_dir);
+    parse_args(argc, argv, fids, new_fid_data, FID_LEN, &write_trck_num, &path, &path_size, &is_dir);
 
     // Print arguments
     printf("Configuration: \n");
@@ -212,15 +234,14 @@ int main(int argc, char *argv[]) {
         printf("\t\t%d. %s\n", i+1, path[i]);
     }
     printf("\tEditing strings: \n");
-    for (int i = 0; i < fid_len; i++) {
-        printf("\t\t%s: %s\n", editable_fid[i], new_fid_data[i]);
+    for (int i = 0; i < FID_LEN; i++) {
+        printf("\t\t%s: %s\n", fids[i], new_fid_data[i]);
     }
     printf("\tis_dir: %d\n\n", is_dir);
 
 
     for (int id = 0; id < path_size; id++) {
-        FILE *f = fopen(path[id], "r+b");
-        
+        FILE *f = fopen(path[id], "r+b");  
         if (f == NULL) {
             printf("File does not exist.\n");
             exit(1);
@@ -242,7 +263,7 @@ int main(int argc, char *argv[]) {
 
             int len_data = get_frame_data_len(frame_header);
             strncpy(fid_str, frame_header.fid, 4);
-            int fid_index = get_fid_index(editable_fid, fid_len, fid_str);
+            int fid_index = get_fid_index(fids, FID_LEN, fid_str);
 
             if (fid_index != -1 && new_fid_data[fid_index][0] != '\0') {
                 fseek(f, -6, SEEK_CUR); // Seek back to frame header size 
@@ -263,7 +284,6 @@ int main(int argc, char *argv[]) {
         fclose(f);
     }
 
-    free_fid_data(editable_fid, new_fid_data, fid_len);
     free_arg_data(path, path_size);
 
     return 0;

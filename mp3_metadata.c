@@ -82,7 +82,7 @@ void parse_args(int argc, char *argv[],
                 printf("\t-b ALBUM, \tWrite new album name ALBUM for all files in path\n");
                 printf("\t-t TITLE, \tWrite new title(s) for all files in path. If PATH contains more than one file, TITLE can contain an equivalent number of titles, separated by commas.\n");
                 printf("\t-n, \tWrite track number for all files in path. If this option is selected, the track number for the file must be contained in beginning of the filename.\n");
-
+                
                 exit(0);
                 break;
             case '?':
@@ -127,7 +127,7 @@ void parse_args(int argc, char *argv[],
         char *filepath_prefix = calloc(strlen(filepath) + 1 + 1, 1);
         strncpy(filepath_prefix, filepath, strlen(filepath));
         filepath_prefix[strlen(filepath)] = '\\';
-
+        
         // Count number of files in DIR and find longest length filename
         while ((entry = readdir(dir)) != NULL) {
             char *full_path = concatenate(filepath_prefix, entry->d_name);
@@ -273,6 +273,7 @@ int main(int argc, char *argv[]) {
                 int remaining_metadata_sz = header_metainfo.metadata_sz - (bytes_read + 10);
                 int bytes_written = write_new_data(new_fid_data[fid_index], frame_header, remaining_metadata_sz, f);
             }
+
             read_frame_data(f, len_data);
             bytes_read += 10 + len_data; 
         }

@@ -18,4 +18,8 @@ char *concatenate(char *s1, char *s2) {
     return s3;
 }
 
+int get_trck(char *filepath, int prefix_len) {
+    return atoi(filepath + prefix_len);
+}
+
 #endif

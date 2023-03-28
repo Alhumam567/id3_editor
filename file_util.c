@@ -10,12 +10,12 @@ int get_frame_data_len(ID3V2_FRAME_HEADER h) {
 
 
 /**
- * @brief 
+ * @brief Writes new length as synchsafe int of size 4. File pointer must be pointing to first byte (big endian)
  * 
- * @param new_len 
- * @param f 
- * @param verbose 
- * @return int 
+ * @param new_len - New length of ID3 frame data (must include initial null byte)
+ * @param f - File pointer
+ * @param verbose - Prints out new length integer as synchsafe int 
+ * @return int - returns new length
  */
 int write_new_len(int new_len, FILE *f, int verbose) {
     char synchsafe_nl[4];
@@ -32,7 +32,17 @@ int write_new_len(int new_len, FILE *f, int verbose) {
 }
 
 
-
+/**
+ * @brief Helper function for rewriting a buffer of bytes in order to accommodate larger
+ * and smaller frame data for intermediate frames. Buffer of size <remaining_metadata_size>
+ * will be rewritten at its current position + offset. If zero_buf is enabled, the buffer
+ * will be nulled prior to rewriting.  
+ * 
+ * @param offset - Number of bytes to move buffer by, can be negative
+ * @param remaining_metadata_size - Remaining metadata bytes from current file pointer <f> position till the end
+ * @param zero_buf - Boolean for zeroing buffer prior to rewrite
+ * @param f - File pointer
+ */
 void rewrite_buffer(signed int offset, int remaining_metadata_size, int zero_buf, FILE *f) {
     int buf_size = remaining_metadata_size;
     char *buf = malloc(buf_size);

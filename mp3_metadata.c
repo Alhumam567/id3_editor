@@ -23,7 +23,7 @@
  * @param fid_len - Count of editable frame IDs  
  * @param path - Pointer to array of variable length strings that are paths of files to be edited
  * @param path_size - Int pointer containing count of files to be edited
- * @param is_dir - Is filepath argument a directory
+ * @param dir_len - Length of filepath directory-to prefix, 0 if arg passed is file.
  */
 void parse_args(int argc, char *argv[], 
                 char edit_fids[FID_LEN][5],
@@ -32,7 +32,7 @@ void parse_args(int argc, char *argv[],
                 int *write_trck_num,
                 char ***path, 
                 int *path_size,
-                int *is_dir) {
+                int *dir_len) {
     
     //File or Dir path is required at minimum
     if (argc < 2) {
@@ -116,7 +116,7 @@ void parse_args(int argc, char *argv[],
         
     // If filepath arg is a DIR, retrieve all child filepaths for editing
     if (S_ISDIR(statbuf.st_mode)) {
-        *is_dir = 1;
+        *dir_len = strlen(filepath);
 
         DIR *dir = opendir(filepath);
         DIR *item_dir;
@@ -173,7 +173,7 @@ void parse_args(int argc, char *argv[],
 
         free(filepath_prefix);
     } else { // Filepath argument is a file
-        *is_dir = 0;
+        *dir_len = 0;
         *path_size = 1;
 
         *path = malloc(sizeof(char *));
@@ -223,9 +223,9 @@ int main(int argc, char *argv[]) {
     char **path;
     extern char fids[FID_LEN][5];
     char new_fid_data[FID_LEN][256] = {'\0'};
-    int is_dir, path_size, write_trck_num;
+    int dir_len, path_size, write_trck_num;
 
-    parse_args(argc, argv, fids, new_fid_data, FID_LEN, &write_trck_num, &path, &path_size, &is_dir);
+    parse_args(argc, argv, fids, new_fid_data, FID_LEN, &write_trck_num, &path, &path_size, &dir_len);
 
     // Print arguments
     printf("Configuration: \n");
@@ -237,7 +237,10 @@ int main(int argc, char *argv[]) {
     for (int i = 0; i < FID_LEN; i++) {
         printf("\t\t%s: %s\n", fids[i], new_fid_data[i]);
     }
-    printf("\tis_dir: %d\n\n", is_dir);
+    if (dir_len > 0)
+        printf("\tDir: true");
+    else 
+        printf("\tDir: false");
 
 
     for (int id = 0; id < path_size; id++) {
@@ -265,10 +268,18 @@ int main(int argc, char *argv[]) {
             strncpy(fid_str, frame_header.fid, 4);
             int fid_index = get_fid_index(fids, FID_LEN, fid_str);
 
+            // If frame <frame_header> is editable and argument passed for editing it
             if (fid_index != -1 && new_fid_data[fid_index][0] != '\0') {
+                // Special case for TRCK frame and retrieving track number from filename
+                if (strncmp(fids[fid_index], "TRCK", 4) == 0) {
+                    char trck[4];
+                    itoa(get_trck(path[id], dir_len), trck, 10);
+                    strncpy(new_fid_data[fid_index], trck, 4);
+                }
+
                 fseek(f, -6, SEEK_CUR); // Seek back to frame header size 
                 len_data = write_new_len(strlen(new_fid_data[fid_index]), f, 0);
-                fseek(f, 2 + 1, SEEK_CUR); // Seek past flag and constant first null byte
+                fseek(f, 2 + 1, SEEK_CUR); // Seek past frame header flag and data constant first null byte
 
                 int remaining_metadata_sz = header_metainfo.metadata_sz - (bytes_read + 10);
                 int bytes_written = write_new_data(new_fid_data[fid_index], frame_header, remaining_metadata_sz, f);

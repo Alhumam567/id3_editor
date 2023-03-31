@@ -78,10 +78,10 @@ void parse_args(int argc, char *argv[],
                 printf("Usage: ./mp3.exe [OPTION]... PATH\n");
                 printf("Reads and edits ID3 metadata tags.\n");
                 printf("Options:\n");
-                printf("\t-a ARTIST, \tWrite new artist name ARTIST for all files in path\n");
-                printf("\t-b ALBUM, \tWrite new album name ALBUM for all files in path\n");
-                printf("\t-t TITLE, \tWrite new title(s) for all files in path. If PATH contains more than one file, TITLE can contain an equivalent number of titles, separated by commas.\n");
-                printf("\t-n, \tWrite track number for all files in path. If this option is selected, the track number for the file must be contained in beginning of the filename.\n");
+                printf("\t%-14s\tWrite new artist name ARTIST for all files in path\n", "-a ARTIST, ");
+                printf("\t%-14s\tWrite new album name ALBUM for all files in path\n", "-b ALBUM, ");
+                printf("\t%-14s\tWrite new title(s) for all files in path. If PATH\n\t%-11s\tcontains more than one file, TITLE can contain an\n\t%-11s\tequivalent number of titles, separated by commas.\n", "-t TITLE, ", " ");
+                printf("\t%-14s\tWrite track number for all files in path. If this\n\t%-11s\toption is selected, the track number for the file\n\t%-11s\tmust be contained in beginning of the filename.\n", "-n, ", " ");
                 
                 exit(0);
                 break;

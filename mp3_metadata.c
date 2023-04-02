@@ -29,7 +29,6 @@ void parse_args(int argc, char *argv[],
                 char edit_fids[FID_LEN][5],
                 char edit_fids_str[FID_LEN][256],
                 int fid_len,
-                int *write_trck_num,
                 char ***path, 
                 int *path_size,
                 int *dir_len) {
@@ -226,9 +225,9 @@ int main(int argc, char *argv[]) {
     char **path;
     extern char fids[FID_LEN][5];
     char new_fid_data[FID_LEN][256] = {'\0'};
-    int dir_len, path_size, write_trck_num;
+    int dir_len, path_size;
 
-    parse_args(argc, argv, fids, new_fid_data, FID_LEN, &write_trck_num, &path, &path_size, &dir_len);
+    parse_args(argc, argv, fids, new_fid_data, FID_LEN, &path, &path_size, &dir_len);
 
     // Print arguments
     printf("Configuration: \n");
@@ -259,12 +258,19 @@ int main(int argc, char *argv[]) {
 
         ID3_METAINFO header_metainfo;
         get_ID3_metainfo(&header_metainfo, &header, f, 1);
-        int metadata_sz = header_metainfo.metadata_sz;
         
-        // Search and edit existing frames
-        int bytes_read = 0; 
+        int frames_edited[FID_LEN] = { 0 };
+        for (int i = 0; i < header_metainfo.frame_count; i++) {
+            int f_ind = get_fid_index(fids, FID_LEN, header_metainfo.fids[i]);
+            if (f_ind >= 0) frames_edited[i] = 1;
+        }
+        
+        int bytes_read = 0;
+        int metadata_sz = header_metainfo.metadata_sz;
         char *data;
         char fid_str[5] = {'\0'};
+
+        // Search and edit existing frames
         for(int i = 0; i < header_metainfo.frame_count; i++) {
             ID3V2_FRAME_HEADER frame_header;
             read_frame_header(&frame_header, f);    
@@ -275,6 +281,8 @@ int main(int argc, char *argv[]) {
 
             // If frame <frame_header> is editable and argument passed for editing it
             if (fid_index != -1 && new_fid_data[fid_index][0] != '\0') {
+                frames_edited[fid_index] = 1;
+
                 // Special case for TRCK frame and retrieving track number from filename
                 if (strncmp(fids[fid_index], "TRCK", 4) == 0) {
                     char trck[4] = {'\0'};
@@ -285,13 +293,29 @@ int main(int argc, char *argv[]) {
                 int new_len_data = write_new_len(strlen(new_fid_data[fid_index]), f, 0) + 1;                
 
                 int remaining_metadata_sz = header_metainfo.metadata_sz - (bytes_read + 10 + len_data);
-                overwrite_data(new_fid_data[fid_index], len_data, remaining_metadata_sz, f);  
+                overwrite_frame_data(new_fid_data[fid_index], len_data, remaining_metadata_sz, f);  
 
                 len_data = new_len_data;
             }
 
             read_frame_data(f, len_data);
             bytes_read += 10 + len_data; 
+        }
+
+        // Append necessary new frames
+        for (int i = 0; i < FID_LEN; i++) {
+            if (!frames_edited[i]) {
+                ID3V2_FRAME_HEADER frame_header;
+                char ssint[4];
+                intToSynchsafeint32(1 + strlen(new_fid_data[i]), ssint);
+                char flags[2] = {'\0'};
+                strncpy(frame_header.fid, fids[i], 4);
+                strncpy(frame_header.size, ssint, 4);
+                strncpy(frame_header.flags, flags, 2);
+
+                write_frame_header(frame_header, f);
+                write_frame_data(new_fid_data[i], f);
+            }
         }
         
         // Print all ID3 data

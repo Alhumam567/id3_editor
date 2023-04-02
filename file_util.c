@@ -36,6 +36,19 @@ int write_new_len(int new_len, FILE *f, int verbose) {
 }
 
 
+
+void write_frame_data(char *data, FILE *f) {
+
+}
+
+
+
+void write_frame_header(ID3V2_FRAME_HEADER header, FILE *f) {
+
+}
+
+
+
 /**
  * @brief Helper function for rewriting a buffer of bytes in order to accommodate larger
  * and smaller frame data for intermediate frames. Buffer of size <remaining_metadata_size>
@@ -75,7 +88,7 @@ void rewrite_buffer(signed int offset, int remaining_metadata_size, int zero_buf
  * @param f - File pointer
  * @return int - Returns the number of bytes written
  */
-int overwrite_data(char *new_data, int old_data_sz, int remaining_metadata_sz, FILE *f) {
+int overwrite_frame_data(char *new_data, int old_data_sz, int remaining_metadata_sz, FILE *f) {
     //Clear current data
     char *null_buf = calloc(old_data_sz, 1);
     fwrite(null_buf, old_data_sz, 1, f);
@@ -91,12 +104,9 @@ int overwrite_data(char *new_data, int old_data_sz, int remaining_metadata_sz, F
 
         fseek(f, -1 * new_len, SEEK_CUR);
         fwrite(new_data, new_len, 1, f);
-        fseek(f, -1 * (new_len + 1), SEEK_CUR);
     } else if (new_len + 1 == old_data_sz) {
         fseek(f, 1, SEEK_CUR);
-        fwrite(new_data, new_len, 1, f);
-
-        fseek(f,-1 * (new_len + 1),SEEK_CUR);
+        fwrite(new_data, new_len, 1, f);    
     } else {
         fseek(f, old_data_sz, SEEK_CUR);
 
@@ -104,9 +114,9 @@ int overwrite_data(char *new_data, int old_data_sz, int remaining_metadata_sz, F
 
         fseek(f, -1 * new_len, SEEK_CUR);
         fwrite(new_data, new_len, 1, f);
-        fseek(f, -1 * (new_len + 1), SEEK_CUR);
     }
 
+    fseek(f,-1 * (new_len + 1),SEEK_CUR);
     fflush(f);
 
     return new_len + 1;

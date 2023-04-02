@@ -163,7 +163,6 @@ void parse_args(int argc, char *argv[],
                 printf("Error reading input dir file %s, errno: %d", full_path, errno);
                 exit(1);
             } else if (S_ISREG(statbuf.st_mode)) {
-                // printf("%s %c %d\n", entry->d_name, edit_fids_str[3][0], atoi(entry->d_name));
                 if (edit_fids_str[3][0] == '1' && atoi(entry->d_name) <= 0) { // Input validate filename includes track num if opt is set
                     printf("Error obtaining file number for input dir file %s", full_path);
                     exit(1);    
@@ -270,21 +269,19 @@ int main(int argc, char *argv[]) {
 
             int len_data = get_frame_data_len(frame_header);
             strncpy(fid_str, frame_header.fid, 4);
-            printf("fid: %s\tlen_data: %d\n", fid_str, len_data);
             int fid_index = get_fid_index(fids, FID_LEN, fid_str);
 
             // If frame <frame_header> is editable and argument passed for editing it
             if (fid_index != -1 && new_fid_data[fid_index][0] != '\0') {
                 // Special case for TRCK frame and retrieving track number from filename
                 if (strncmp(fids[fid_index], "TRCK", 4) == 0) {
-                    char trck[4];
-                    itoa(get_trck(path[id], dir_len), trck, 10);
+                    char trck[4] = {'\0'};
+                    itoa(get_trck(path[id], dir_len + 1), trck, 10);
                     strncpy(new_fid_data[fid_index], trck, 4);
                 }
 
                 fseek(f, -6, SEEK_CUR); // Seek back to frame header size 
                 len_data = write_new_len(strlen(new_fid_data[fid_index]), f, 0) + 1;
-                printf("len_data: %d   ", len_data);
                 fseek(f, 2, SEEK_CUR); // Seek past frame header flag and data constant first null byte
 
                 int remaining_metadata_sz = header_metainfo.metadata_sz - (bytes_read + 10);

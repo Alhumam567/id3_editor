@@ -65,14 +65,13 @@ void rewrite_buffer(signed int offset, int remaining_metadata_size, int zero_buf
 int write_new_data(char *data, ID3V2_FRAME_HEADER header, int remaining_metadata_sz, FILE *f) {
     int frame_data_sz = synchsafeint32ToInt(header.size);
     int new_len = strlen(data);
-    printf("%d %d\n", frame_data_sz, new_len);
 
     if (new_len + 1 > frame_data_sz) {
         fseek(f, frame_data_sz, SEEK_CUR);
 
-        rewrite_buffer(new_len - frame_data_sz, remaining_metadata_sz - frame_data_sz, 0, f);
+        rewrite_buffer(new_len + 1 - frame_data_sz, remaining_metadata_sz - frame_data_sz, 0, f);
 
-        fseek(f, -1 * new_len + 1, SEEK_CUR);
+        fseek(f, -1 * new_len, SEEK_CUR);
         fwrite(data, new_len, 1, f);
         fseek(f, -1 * (new_len + 1), SEEK_CUR);
     } else if (new_len + 1 == frame_data_sz) {
@@ -83,9 +82,9 @@ int write_new_data(char *data, ID3V2_FRAME_HEADER header, int remaining_metadata
     } else {
         fseek(f, frame_data_sz, SEEK_CUR);
 
-        rewrite_buffer(new_len - frame_data_sz, remaining_metadata_sz - frame_data_sz, 1, f);
+        rewrite_buffer(new_len + 1 - frame_data_sz, remaining_metadata_sz - frame_data_sz, 1, f);
 
-        fseek(f, -1 * new_len + 1, SEEK_CUR);
+        fseek(f, -1 * new_len, SEEK_CUR);
         fwrite(data, new_len, 1, f);
         fseek(f, -1 * (new_len + 1), SEEK_CUR);
     }

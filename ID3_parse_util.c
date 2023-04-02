@@ -86,7 +86,7 @@ ID3V2_FRAME_HEADER *read_frame_header(ID3V2_FRAME_HEADER *h, FILE *f) {
  * @param verbose  - Prints metainfo to stdout
  * @return ID3_METAINFO* - returns pointer to metainfo struct <metainfo>
  */
-ID3_METAINFO *get_ID3_meta_info(ID3_METAINFO *metainfo, ID3V2_HEADER *header, FILE *f, int verbose) {
+ID3_METAINFO *get_ID3_metainfo(ID3_METAINFO *metainfo, ID3V2_HEADER *header, FILE *f, int verbose) {
     fseek(f, 10, SEEK_SET);
 
     int sz = 0;

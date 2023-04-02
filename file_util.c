@@ -18,6 +18,8 @@ int get_frame_data_len(ID3V2_FRAME_HEADER h) {
  * @return int - returns new length
  */
 int write_new_len(int new_len, FILE *f, int verbose) {
+    fseek(f, -6, SEEK_CUR); // Seek back to frame header size 
+
     char synchsafe_nl[4];
     intToSynchsafeint32(new_len + 1, synchsafe_nl);
     
@@ -27,6 +29,8 @@ int write_new_len(int new_len, FILE *f, int verbose) {
     }
     
     fwrite(synchsafe_nl, 1, 4, f);
+
+    fseek(f, 2, SEEK_CUR); // Seek past frame header flag
 
     return new_len;
 }
@@ -61,48 +65,68 @@ void rewrite_buffer(signed int offset, int remaining_metadata_size, int zero_buf
 }
 
 
+/**
+ * @brief Helper function overwriting any existing frame data with a new, possibly longer or shorter,
+ * array of bytes. 
+ * 
+ * @param data - New data to write
+ * @param old_data_sz - Byte size of the old data
+ * @param remaining_metadata_sz - Size of the remaining buffer of ID3 metadata 
+ * @param f - File pointer
+ * @return int - Returns the number of bytes written
+ */
+int overwrite_data(char *new_data, int old_data_sz, int remaining_metadata_sz, FILE *f) {
+    //Clear current data
+    char *null_buf = calloc(old_data_sz, 1);
+    fwrite(null_buf, old_data_sz, 1, f);
+    fseek(f, -1 * old_data_sz, SEEK_CUR);
+    free(null_buf);
 
-int write_new_data(char *data, ID3V2_FRAME_HEADER header, int remaining_metadata_sz, FILE *f) {
-    int frame_data_sz = synchsafeint32ToInt(header.size);
-    int new_len = strlen(data);
+    int new_len = strlen(new_data);
 
-    if (new_len + 1 > frame_data_sz) {
-        fseek(f, frame_data_sz, SEEK_CUR);
+    if (new_len + 1 > old_data_sz) {
+        fseek(f, old_data_sz, SEEK_CUR);
 
-        rewrite_buffer(new_len + 1 - frame_data_sz, remaining_metadata_sz - frame_data_sz, 0, f);
+        rewrite_buffer(new_len + 1 - old_data_sz, remaining_metadata_sz, 0, f);
 
         fseek(f, -1 * new_len, SEEK_CUR);
-        fwrite(data, new_len, 1, f);
+        fwrite(new_data, new_len, 1, f);
         fseek(f, -1 * (new_len + 1), SEEK_CUR);
-    } else if (new_len + 1 == frame_data_sz) {
+    } else if (new_len + 1 == old_data_sz) {
         fseek(f, 1, SEEK_CUR);
-        fwrite(data, new_len, 1, f);
+        fwrite(new_data, new_len, 1, f);
 
         fseek(f,-1 * (new_len + 1),SEEK_CUR);
     } else {
-        fseek(f, frame_data_sz, SEEK_CUR);
+        fseek(f, old_data_sz, SEEK_CUR);
 
-        rewrite_buffer(new_len + 1 - frame_data_sz, remaining_metadata_sz - frame_data_sz, 1, f);
+        rewrite_buffer(new_len + 1 - old_data_sz, remaining_metadata_sz, 1, f);
 
         fseek(f, -1 * new_len, SEEK_CUR);
-        fwrite(data, new_len, 1, f);
+        fwrite(new_data, new_len, 1, f);
         fseek(f, -1 * (new_len + 1), SEEK_CUR);
     }
 
-    frame_data_sz = new_len + 1;
     fflush(f);
 
-    return frame_data_sz;
+    return new_len + 1;
 }
 
 
-
+/**
+ * @brief Moves file pointer past frame data to the next frame. 
+ * 
+ * @param f - File pointer
+ * @param len_data - Full length of the data
+ * @return int - Bytes read
+ */
 int read_frame_data(FILE *f, int len_data) {
     char *data = malloc(len_data + 1);
     data[len_data] = '\0';
-    int x = fread(data, 1, len_data, f);
-    if (x != len_data){
-        printf("1. Error occurred reading frame data. %d %d\n", x, len_data);
+    int bytes_read = fread(data, 1, len_data, f);
+
+    if (bytes_read != len_data){
+        printf("Error occurred reading frame data. %d %d\n", bytes_read, len_data);
         exit(1);
     }
 
@@ -158,7 +182,7 @@ void print_data(FILE *f, int frames) {
             }
             printf("\n");
         }  
-        else printf("\tData is an image\n");
+        else printf("\tImage\n");
 
         free(data);
 

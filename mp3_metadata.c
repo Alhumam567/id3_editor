@@ -246,6 +246,7 @@ int main(int argc, char *argv[]) {
         printf("\tDir: false\n");
 
 
+    // Open, edit, and print ID3 metadata for each file  
     for (int id = 0; id < path_size; id++) {
         FILE *f = fopen(path[id], "r+b");  
         if (f == NULL) {
@@ -257,9 +258,10 @@ int main(int argc, char *argv[]) {
         read_header(&header, f, path[id], 1);
 
         ID3_METAINFO header_metainfo;
-        get_ID3_meta_info(&header_metainfo, &header, f, 1);
+        get_ID3_metainfo(&header_metainfo, &header, f, 1);
+        int metadata_sz = header_metainfo.metadata_sz;
         
-        // Search and edit existing FIDs
+        // Search and edit existing frames
         int bytes_read = 0; 
         char *data;
         char fid_str[5] = {'\0'};
@@ -280,19 +282,19 @@ int main(int argc, char *argv[]) {
                     strncpy(new_fid_data[fid_index], trck, 4);
                 }
 
-                fseek(f, -6, SEEK_CUR); // Seek back to frame header size 
-                len_data = write_new_len(strlen(new_fid_data[fid_index]), f, 0) + 1;
-                fseek(f, 2, SEEK_CUR); // Seek past frame header flag and data constant first null byte
+                int new_len_data = write_new_len(strlen(new_fid_data[fid_index]), f, 0) + 1;                
 
-                int remaining_metadata_sz = header_metainfo.metadata_sz - (bytes_read + 10);
-                int bytes_written = write_new_data(new_fid_data[fid_index], frame_header, remaining_metadata_sz, f);
-                
+                int remaining_metadata_sz = header_metainfo.metadata_sz - (bytes_read + 10 + len_data);
+                overwrite_data(new_fid_data[fid_index], len_data, remaining_metadata_sz, f);  
+
+                len_data = new_len_data;
             }
 
             read_frame_data(f, len_data);
             bytes_read += 10 + len_data; 
         }
         
+        // Print all ID3 data
         printf("Reading %s metadata :\n\n", path[id]);
         print_data(f, header_metainfo.frame_count);
 

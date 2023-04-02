@@ -65,26 +65,28 @@ void rewrite_buffer(signed int offset, int remaining_metadata_size, int zero_buf
 int write_new_data(char *data, ID3V2_FRAME_HEADER header, int remaining_metadata_sz, FILE *f) {
     int frame_data_sz = synchsafeint32ToInt(header.size);
     int new_len = strlen(data);
+    printf("%d %d\n", frame_data_sz, new_len);
 
-    if (new_len > frame_data_sz-1) {
-        fseek(f, frame_data_sz-1, SEEK_CUR);
+    if (new_len + 1 > frame_data_sz) {
+        fseek(f, frame_data_sz, SEEK_CUR);
 
         rewrite_buffer(new_len - frame_data_sz, remaining_metadata_sz - frame_data_sz, 0, f);
 
-        fseek(f, -1 * new_len, SEEK_CUR);
-        fwrite(data, new_len, 1,f);
+        fseek(f, -1 * new_len + 1, SEEK_CUR);
+        fwrite(data, new_len, 1, f);
         fseek(f, -1 * (new_len + 1), SEEK_CUR);
-    } else if (new_len == frame_data_sz - 1) {
+    } else if (new_len + 1 == frame_data_sz) {
+        fseek(f, 1, SEEK_CUR);
         fwrite(data, new_len, 1, f);
 
         fseek(f,-1 * (new_len + 1),SEEK_CUR);
     } else {
-        fseek(f, frame_data_sz-1, SEEK_CUR);
+        fseek(f, frame_data_sz, SEEK_CUR);
 
         rewrite_buffer(new_len - frame_data_sz, remaining_metadata_sz - frame_data_sz, 1, f);
 
-        fseek(f, -1 * new_len, SEEK_CUR);
-        fwrite(data, new_len, 1,f);
+        fseek(f, -1 * new_len + 1, SEEK_CUR);
+        fwrite(data, new_len, 1, f);
         fseek(f, -1 * (new_len + 1), SEEK_CUR);
     }
 
@@ -99,9 +101,9 @@ int write_new_data(char *data, ID3V2_FRAME_HEADER header, int remaining_metadata
 int read_frame_data(FILE *f, int len_data) {
     char *data = malloc(len_data + 1);
     data[len_data] = '\0';
-    
-    if (fread(data, 1, len_data, f) != len_data){
-        printf("Error occurred reading frame data.\n");
+    int x = fread(data, 1, len_data, f);
+    if (x != len_data){
+        printf("1. Error occurred reading frame data. %d %d\n", x, len_data);
         exit(1);
     }
 
@@ -145,7 +147,7 @@ void print_data(FILE *f, int frames) {
         data[frame_data_sz] = '\0';
         
         if (fread(data, 1, frame_data_sz, f) != frame_data_sz){
-            printf("Error occurred reading frame data.\n");
+            printf("2. Error occurred reading frame data.\n");
             exit(1);
         }
 

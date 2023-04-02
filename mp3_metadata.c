@@ -68,11 +68,9 @@ void parse_args(int argc, char *argv[],
                 }
                 break;
             case 'n': // TRCK: Track number
-                if (strncmp(optarg, "inc", 3) != 0 && strncmp(optarg, "dec", 3) != 0) errflag++;
-                else {
-                    strncpy(edit_fids_str[3], optarg, 3);
-                    printf("Option detected: %s - %s\n", edit_fids[3], edit_fids_str[3]);
-                }
+                strncpy(edit_fids_str[3], "1", 1);
+                printf("Option detected: %s\n", edit_fids[3]);
+                
                 break;
             case 'h':
                 printf("Usage: ./mp3.exe [OPTION]... PATH\n");
@@ -165,6 +163,12 @@ void parse_args(int argc, char *argv[],
                 printf("Error reading input dir file %s, errno: %d", full_path, errno);
                 exit(1);
             } else if (S_ISREG(statbuf.st_mode)) {
+                // printf("%s %c %d\n", entry->d_name, edit_fids_str[3][0], atoi(entry->d_name));
+                if (edit_fids_str[3][0] == '1' && atoi(entry->d_name) <= 0) { // Input validate filename includes track num if opt is set
+                    printf("Error obtaining file number for input dir file %s", full_path);
+                    exit(1);    
+                }
+
                 strncpy((*path)[j++], full_path, strlen(full_path));
             }
 
@@ -238,9 +242,9 @@ int main(int argc, char *argv[]) {
         printf("\t\t%s: %s\n", fids[i], new_fid_data[i]);
     }
     if (dir_len > 0)
-        printf("\tDir: true");
+        printf("\tDir: true\n");
     else 
-        printf("\tDir: false");
+        printf("\tDir: false\n");
 
 
     for (int id = 0; id < path_size; id++) {
@@ -266,6 +270,7 @@ int main(int argc, char *argv[]) {
 
             int len_data = get_frame_data_len(frame_header);
             strncpy(fid_str, frame_header.fid, 4);
+            printf("fid: %s\tlen_data: %d\n", fid_str, len_data);
             int fid_index = get_fid_index(fids, FID_LEN, fid_str);
 
             // If frame <frame_header> is editable and argument passed for editing it
@@ -278,11 +283,13 @@ int main(int argc, char *argv[]) {
                 }
 
                 fseek(f, -6, SEEK_CUR); // Seek back to frame header size 
-                len_data = write_new_len(strlen(new_fid_data[fid_index]), f, 0);
-                fseek(f, 2 + 1, SEEK_CUR); // Seek past frame header flag and data constant first null byte
+                len_data = write_new_len(strlen(new_fid_data[fid_index]), f, 0) + 1;
+                printf("len_data: %d   ", len_data);
+                fseek(f, 2, SEEK_CUR); // Seek past frame header flag and data constant first null byte
 
                 int remaining_metadata_sz = header_metainfo.metadata_sz - (bytes_read + 10);
                 int bytes_written = write_new_data(new_fid_data[fid_index], frame_header, remaining_metadata_sz, f);
+                
             }
 
             read_frame_data(f, len_data);
@@ -291,7 +298,6 @@ int main(int argc, char *argv[]) {
         
         printf("Reading %s metadata :\n\n", path[id]);
         print_data(f, header_metainfo.frame_count);
-
 
         fclose(f);
     }

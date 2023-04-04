@@ -1,4 +1,4 @@
-#include "mp3_metadata.h"
+#include "id3_editor.h"
 #include "util.c"
 
 /**

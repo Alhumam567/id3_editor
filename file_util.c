@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-#include "mp3_metadata.h"
+#include "id3_editor.h"
 #include "util.c"
 
 
@@ -38,13 +38,24 @@ int write_new_len(int new_len, FILE *f, int verbose) {
 
 
 void write_frame_data(char *data, FILE *f) {
+    fseek(f, 1, SEEK_CUR);
+    fwrite(data, strlen(data), 1, f);
 
+    fflush(f);
 }
 
 
 
 void write_frame_header(ID3V2_FRAME_HEADER header, FILE *f) {
+    fseek(f, 0, SEEK_CUR);
 
+    int num_written = fwrite(&header, sizeof(ID3V2_FRAME_HEADER), 1, f);
+    if (num_written < 1) {
+        printf("Failed to write frame header\n");
+        exit(1);
+    }
+
+    fflush(f);
 }
 
 

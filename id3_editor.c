@@ -6,7 +6,7 @@
 #include <errno.h>
 #include <sys/stat.h>
 
-#include "mp3_metadata.h"
+#include "id3_editor.h"
 #include "id3_parse_util.c"
 #include "file_util.c"
 
@@ -26,8 +26,8 @@
  * @param dir_len - Length of filepath directory-to prefix, 0 if arg passed is file.
  */
 void parse_args(int argc, char *argv[], 
-                char edit_fids[FID_LEN][5],
-                char edit_fids_str[FID_LEN][256],
+                char edit_fids[E_FIDS][5],
+                char edit_fids_str[E_FIDS][256],
                 int fid_len,
                 char ***path, 
                 int *path_size,
@@ -196,8 +196,8 @@ void parse_args(int argc, char *argv[],
  * @param fid - Frame ID string
  * @return int - Index of given frame ID
  */
-int get_fid_index(char fids[FID_LEN][5], int fids_len, char *fid) {
-    for (int i = 0; i < fids_len; i++) {
+int get_fid_index(char fids[E_FIDS][5], char *fid) {
+    for (int i = 0; i < E_FIDS; i++) {
         if (strncmp(fids[i], fid, 4) == 0) return i;
     }
 
@@ -223,11 +223,11 @@ void free_arg_data(char **path, int path_size) {
 
 int main(int argc, char *argv[]) {
     char **path;
-    extern char fids[FID_LEN][5];
-    char new_fid_data[FID_LEN][256] = {'\0'};
+    extern char fids[E_FIDS][5];
+    char new_fid_data[E_FIDS][256] = {'\0'};
     int dir_len, path_size;
 
-    parse_args(argc, argv, fids, new_fid_data, FID_LEN, &path, &path_size, &dir_len);
+    parse_args(argc, argv, fids, new_fid_data, E_FIDS, &path, &path_size, &dir_len);
 
     // Print arguments
     printf("Configuration: \n");
@@ -236,7 +236,7 @@ int main(int argc, char *argv[]) {
         printf("\t\t%d. %s\n", i+1, path[i]);
     }
     printf("\tEditing strings: \n");
-    for (int i = 0; i < FID_LEN; i++) {
+    for (int i = 0; i < E_FIDS; i++) {
         printf("\t\t%s: %s\n", fids[i], new_fid_data[i]);
     }
     if (dir_len > 0)
@@ -259,10 +259,13 @@ int main(int argc, char *argv[]) {
         ID3_METAINFO header_metainfo;
         get_ID3_metainfo(&header_metainfo, &header, f, 1);
         
-        int frames_edited[FID_LEN] = { 0 };
+        int frames_edited[E_FIDS] = { 0 };
         for (int i = 0; i < header_metainfo.frame_count; i++) {
-            int f_ind = get_fid_index(fids, FID_LEN, header_metainfo.fids[i]);
-            if (f_ind >= 0) frames_edited[i] = 1;
+            int f_ind = get_fid_index(fids, header_metainfo.fids[i]);
+            if (f_ind >= 0) frames_edited[f_ind] = 1;
+        }
+        for (int i = 0; i < E_FIDS; i++) {
+            if (new_fid_data[i][0] == '\0') frames_edited[i] = 1;
         }
         
         int bytes_read = 0;
@@ -277,7 +280,7 @@ int main(int argc, char *argv[]) {
 
             int len_data = get_frame_data_len(frame_header);
             strncpy(fid_str, frame_header.fid, 4);
-            int fid_index = get_fid_index(fids, FID_LEN, fid_str);
+            int fid_index = get_fid_index(fids, fid_str);
 
             // If frame <frame_header> is editable and argument passed for editing it
             if (fid_index != -1 && new_fid_data[fid_index][0] != '\0') {
@@ -303,14 +306,12 @@ int main(int argc, char *argv[]) {
         }
 
         // Append necessary new frames
-        for (int i = 0; i < FID_LEN; i++) {
+        for (int i = 0; i < E_FIDS; i++) {
             if (!frames_edited[i]) {
-                ID3V2_FRAME_HEADER frame_header;
-                char ssint[4];
-                intToSynchsafeint32(1 + strlen(new_fid_data[i]), ssint);
+                ID3V2_FRAME_HEADER frame_header;               
                 char flags[2] = {'\0'};
                 strncpy(frame_header.fid, fids[i], 4);
-                strncpy(frame_header.size, ssint, 4);
+                intToSynchsafeint32(1 + strlen(new_fid_data[i]), frame_header.size);
                 strncpy(frame_header.flags, flags, 2);
 
                 write_frame_header(frame_header, f);

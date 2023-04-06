@@ -9,6 +9,7 @@ int get_frame_data_len(ID3V2_FRAME_HEADER h) {
 }
 
 
+
 /**
  * @brief Writes new length as synchsafe int of size 4. File pointer must be pointing to first byte (big endian)
  * 
@@ -32,14 +33,19 @@ int write_new_len(int new_len, FILE *f, int verbose) {
 
     fseek(f, 2, SEEK_CUR); // Seek past frame header flag
 
-    return new_len;
+    return new_len + 1;
 }
 
 
 
 void write_frame_data(char *data, FILE *f) {
     fseek(f, 1, SEEK_CUR);
-    fwrite(data, strlen(data), 1, f);
+
+    int written = fwrite(data, strlen(data), 1, f);
+    if (written < 1) {
+        printf("Failed to write frame data\n");
+        exit(1);
+    }
 
     fflush(f);
 }
@@ -49,13 +55,20 @@ void write_frame_data(char *data, FILE *f) {
 void write_frame_header(ID3V2_FRAME_HEADER header, FILE *f) {
     fseek(f, 0, SEEK_CUR);
 
-    int num_written = fwrite(&header, sizeof(ID3V2_FRAME_HEADER), 1, f);
-    if (num_written < 1) {
+    int written = fwrite(&header, sizeof(ID3V2_FRAME_HEADER), 1, f);
+    if (written < 1) {
         printf("Failed to write frame header\n");
         exit(1);
     }
 
     fflush(f);
+}
+
+
+
+void write_new_frame(ID3V2_FRAME_HEADER header, char *data, FILE *f) {
+    write_frame_header(header, f);
+    write_frame_data(data, f);
 }
 
 
@@ -134,6 +147,13 @@ int overwrite_frame_data(char *new_data, int old_data_sz, int remaining_metadata
 }
 
 
+
+void int_to_header_ssint(int new_len, char header_sz[4]) {
+    intToSynchsafeint32(new_len, header_sz);
+}
+
+
+
 /**
  * @brief Moves file pointer past frame data to the next frame. 
  * 
@@ -158,7 +178,16 @@ int read_frame_data(FILE *f, int len_data) {
 
 
 
-void print_data(FILE *f, int frames) {
+void print_data(FILE *f, ID3_METAINFO metainfo) {
+    int frames = metainfo.frame_count;
+
+    printf("Printing file info:\n");
+    printf("\tMetadata Size: %d\n", metainfo.metadata_sz);
+    printf("\tFrame Count: %d\n", metainfo.frame_count);
+    printf("\tFrames: ");
+    for (int i = 0; i < metainfo.frame_count; i++) printf("%.4s;", metainfo.fids[i]);
+    printf("\n");
+
     int bytes_read = 0; 
     char *data;
     char fid_str[5] = {'\0'};

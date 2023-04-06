@@ -19,6 +19,7 @@
  * @param argc - Command-line argument count 
  * @param argv - Command-line arguments
  * @param edit_fids - Array of frame ID strings
+ * @param frame_args - Bool array of frames to edit
  * @param edit_fids_str - Array of respective frame data for frame IDs 
  * @param fid_len - Count of editable frame IDs  
  * @param path - Pointer to array of variable length strings that are paths of files to be edited
@@ -27,6 +28,7 @@
  */
 void parse_args(int argc, char *argv[], 
                 char edit_fids[E_FIDS][5],
+                int frame_args[E_FIDS],
                 char edit_fids_str[E_FIDS][256],
                 int fid_len,
                 char ***path, 
@@ -50,6 +52,8 @@ void parse_args(int argc, char *argv[],
                 else {
                     strncpy(edit_fids_str[0], optarg, strlen(optarg));
                     printf("Option detected: %s - %s\n", edit_fids[0], edit_fids_str[0]);
+
+                    frame_args[0] = 0;
                 }
                 break;
             case 'b': // TALB: Album name
@@ -57,6 +61,8 @@ void parse_args(int argc, char *argv[],
                 else {
                     strncpy(edit_fids_str[1], optarg, strlen(optarg));
                     printf("Option detected: %s - %s\n", edit_fids[1], edit_fids_str[1]);
+                
+                    frame_args[1] = 0;
                 }
                 break;
             case 't': // TIT2: Title
@@ -64,12 +70,15 @@ void parse_args(int argc, char *argv[],
                 else {
                     strncpy(edit_fids_str[2], optarg, strlen(optarg));   
                     printf("Option detected: %s - %s\n", edit_fids[2], edit_fids_str[2]);
+                
+                    frame_args[2] = 0;
                 }
                 break;
             case 'n': // TRCK: Track number
                 strncpy(edit_fids_str[3], "1", 1);
                 printf("Option detected: %s\n", edit_fids[3]);
                 
+                frame_args[3] = 0;
                 break;
             case 'h':
                 printf("Usage: ./mp3.exe [OPTION]... PATH\n");
@@ -222,12 +231,16 @@ void free_arg_data(char **path, int path_size) {
 
 
 int main(int argc, char *argv[]) {
-    char **path;
-    extern char fids[E_FIDS][5];
-    char new_fid_data[E_FIDS][256] = {'\0'};
-    int dir_len, path_size;
+    extern char fids[E_FIDS][5]; //Array of supported frame IDs for editing
+    
+    char **path; //Array of filepaths
+    int path_size; //Number of files in <path>;
+    int dir_len; //Length of directory prefix in filepath
 
-    parse_args(argc, argv, fids, new_fid_data, E_FIDS, &path, &path_size, &dir_len);
+    int frame_args[E_FIDS] = { 1 }; //Array of bool flags representing frames that need to be edited
+    char new_fid_data[E_FIDS][256] = {'\0'}; //New frame data
+
+    parse_args(argc, argv, fids, frame_args, new_fid_data, E_FIDS, &path, &path_size, &dir_len);
 
     // Print arguments
     printf("Configuration: \n");
@@ -240,9 +253,9 @@ int main(int argc, char *argv[]) {
         printf("\t\t%s: %s\n", fids[i], new_fid_data[i]);
     }
     if (dir_len > 0)
-        printf("\tDir: true\n");
+        printf("\tDir: true\n\n");
     else 
-        printf("\tDir: false\n");
+        printf("\tDir: false\n\n");
 
 
     // Open, edit, and print ID3 metadata for each file  
@@ -259,15 +272,11 @@ int main(int argc, char *argv[]) {
         ID3_METAINFO header_metainfo;
         get_ID3_metainfo(&header_metainfo, &header, f, 1);
         
-        int frames_edited[E_FIDS] = { 0 };
-        for (int i = 0; i < header_metainfo.frame_count; i++) {
-            int f_ind = get_fid_index(fids, header_metainfo.fids[i]);
-            if (f_ind >= 0) frames_edited[f_ind] = 1;
-        }
-        for (int i = 0; i < E_FIDS; i++) {
-            if (new_fid_data[i][0] == '\0') frames_edited[i] = 1;
-        }
+        int frames_edited[E_FIDS];
+        memcpy(frames_edited, frame_args, sizeof(frames_edited));
         
+        printf("Editing file...\n\n");
+
         int bytes_read = 0;
         int metadata_sz = header_metainfo.metadata_sz;
         char *data;
@@ -293,8 +302,7 @@ int main(int argc, char *argv[]) {
                     strncpy(new_fid_data[fid_index], trck, 4);
                 }
 
-                int new_len_data = write_new_len(strlen(new_fid_data[fid_index]), f, 0) + 1;                
-
+                int new_len_data = write_new_len(strlen(new_fid_data[fid_index]), f, 0);
                 int remaining_metadata_sz = header_metainfo.metadata_sz - (bytes_read + 10 + len_data);
                 overwrite_frame_data(new_fid_data[fid_index], len_data, remaining_metadata_sz, f);  
 
@@ -311,17 +319,24 @@ int main(int argc, char *argv[]) {
                 ID3V2_FRAME_HEADER frame_header;               
                 char flags[2] = {'\0'};
                 strncpy(frame_header.fid, fids[i], 4);
-                intToSynchsafeint32(1 + strlen(new_fid_data[i]), frame_header.size);
+                int_to_header_ssint(1 + strlen(new_fid_data[i]), frame_header.size);
                 strncpy(frame_header.flags, flags, 2);
 
-                write_frame_header(frame_header, f);
-                write_frame_data(new_fid_data[i], f);
+                write_new_frame(frame_header, new_fid_data[i], f);
+                
+                char (*tmp_fids)[4] = malloc((header_metainfo.frame_count+1) * sizeof(char *));
+                for (int j = 0; j < header_metainfo.frame_count; j++) strncpy(tmp_fids[j], header_metainfo.fids[j], 4);
+                strncpy(tmp_fids[header_metainfo.frame_count], fids[i], 4);
+                free(header_metainfo.fids);
+                
+                header_metainfo.fids = tmp_fids; 
+                header_metainfo.frame_count++;
             }
         }
         
         // Print all ID3 data
         printf("Reading %s metadata :\n\n", path[id]);
-        print_data(f, header_metainfo.frame_count);
+        print_data(f, header_metainfo);
 
         fclose(f);
     }

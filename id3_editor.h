@@ -23,7 +23,7 @@ typedef struct ID3V2_FRAME_HEADER {
 typedef struct ID3_METAINFO {
     int metadata_sz;
     int frame_count;
-    char **fids;
+    char (*fids)[4];
 } ID3_METAINFO;
 
 #endif

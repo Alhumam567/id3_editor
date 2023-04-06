@@ -123,7 +123,6 @@ ID3_METAINFO *get_ID3_metainfo(ID3_METAINFO *metainfo, ID3V2_HEADER *header, FIL
 
     // Save ID3 frame IDs
     for (int i = 0; i < frames; i++) {
-        metainfo->fids[i] = calloc(1, 5);
         if (fread(metainfo->fids[i], 1, 4, f) != 4) {
             printf("Error occurred reading file identifier.\n");
             exit(1);
@@ -141,7 +140,7 @@ ID3_METAINFO *get_ID3_metainfo(ID3_METAINFO *metainfo, ID3V2_HEADER *header, FIL
         printf("Metadata Size: %d\n", metainfo->metadata_sz);
         printf("Frame Count: %d\n", metainfo->frame_count);
         printf("Frames: ");
-        for (int i = 0; i < metainfo->frame_count; i++) printf("%s;", metainfo->fids[i]);
+        for (int i = 0; i < metainfo->frame_count; i++) printf("%.4s;", metainfo->fids[i]);
         printf("\n\n");
     }
 

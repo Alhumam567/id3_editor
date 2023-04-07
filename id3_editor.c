@@ -25,6 +25,7 @@
  * @param path - Pointer to array of variable length strings that are paths of files to be edited
  * @param path_size - Int pointer containing count of files to be edited
  * @param dir_len - Length of filepath directory-to prefix, 0 if arg passed is file.
+ * @param num_titles - Pointer to int to save number of titles if provided in args
  */
 void parse_args(int argc, char *argv[], 
                 char edit_fids[E_FIDS][5],
@@ -33,7 +34,8 @@ void parse_args(int argc, char *argv[],
                 int fid_len,
                 char ***path, 
                 int *path_size,
-                int *dir_len) {
+                int *dir_len,
+                int *num_titles) {
     
     //File or Dir path is required at minimum
     if (argc < 2) {
@@ -72,6 +74,14 @@ void parse_args(int argc, char *argv[],
                     printf("Option detected: %s - %s\n", edit_fids[2], edit_fids_str[2]);
                 
                     frame_args[2] = 0;
+
+                    char titles[256];
+                    strncpy(titles, optarg, strlen(optarg));
+                    char *tok = strtok(titles, ",");
+                    while (tok != NULL) {
+                        (*num_titles)++;
+                        tok = strtok(NULL, ",");
+                    }
                 }
                 break;
             case 'n': // TRCK: Track number
@@ -156,6 +166,12 @@ void parse_args(int argc, char *argv[],
         int j = 0;
         *path_size = file_count;
 
+        // Validate number of files with number of titles
+        if (frame_args[2] == 0 && (*num_titles != 1 && *num_titles != file_count)) {
+            printf("Error, number of titles provided is invalid with the number of files being edited.\n");
+            exit(0);
+        }
+
         for (; j < file_count; j++) 
             (*path)[j] = calloc(max_filename_len + strlen(filepath), 1);
 
@@ -186,6 +202,12 @@ void parse_args(int argc, char *argv[],
     } else { // Filepath argument is a file
         *dir_len = 0;
         *path_size = 1;
+
+        // Validate number of files with number of titles
+        if (frame_args[2] == 0 && *num_titles > 1) {
+            printf("Error, number of titles provided is invalid with the number of files being edited.\n");
+            exit(0);
+        }
 
         *path = malloc(sizeof(char *));
         **path = malloc(strlen(filepath));
@@ -239,8 +261,9 @@ int main(int argc, char *argv[]) {
 
     int frame_args[E_FIDS] = { 1 }; //Array of bool flags representing frames that need to be edited
     char new_fid_data[E_FIDS][256] = {'\0'}; //New frame data
+    int num_titles = 0;
 
-    parse_args(argc, argv, fids, frame_args, new_fid_data, E_FIDS, &path, &path_size, &dir_len);
+    parse_args(argc, argv, fids, frame_args, new_fid_data, E_FIDS, &path, &path_size, &dir_len, &num_titles);
 
     // Print arguments
     printf("Configuration: \n");
@@ -257,6 +280,10 @@ int main(int argc, char *argv[]) {
     else 
         printf("\tDir: false\n\n");
 
+    char titles[256];
+    strncpy(titles, new_fid_data[get_fid_index(fids, "TIT2")], 256);
+    char *init_tok = strtok(titles, ",");
+    strncpy(new_fid_data[get_fid_index(fids, "TIT2")], init_tok, strlen(init_tok));
 
     // Open, edit, and print ID3 metadata for each file  
     for (int id = 0; id < path_size; id++) {
@@ -277,6 +304,20 @@ int main(int argc, char *argv[]) {
         
         printf("Editing file...\n\n");
 
+        // Special case for TRCK frame and retrieving track number from filename
+        int trck_ind = get_fid_index(fids, "TRCK");
+        if (frame_args[trck_ind] == 0) {
+            char trck[4] = {'\0'};
+            itoa(get_trck(path[id], dir_len + 1), trck, 10);
+            strncpy(new_fid_data[trck_ind], trck, 4);
+        } 
+
+        int tit2_ind = get_fid_index(fids, "TIT2");
+        if (id > 0 && frame_args[tit2_ind] == 0 && num_titles > 1) { 
+            char *tok = strtok(NULL, ",");
+            strncpy(new_fid_data[tit2_ind], tok, strlen(tok));
+        }
+
         int bytes_read = 0;
         int metadata_sz = header_metainfo.metadata_sz;
         char *data;
@@ -291,16 +332,9 @@ int main(int argc, char *argv[]) {
             strncpy(fid_str, frame_header.fid, 4);
             int fid_index = get_fid_index(fids, fid_str);
 
-            // If frame <frame_header> is editable and argument passed for editing it
-            if (fid_index != -1 && new_fid_data[fid_index][0] != '\0') {
+            // If frame is editable and argument passed for editing it
+            if (fid_index != -1 && frame_args[fid_index] == 0) {
                 frames_edited[fid_index] = 1;
-
-                // Special case for TRCK frame and retrieving track number from filename
-                if (strncmp(fids[fid_index], "TRCK", 4) == 0) {
-                    char trck[4] = {'\0'};
-                    itoa(get_trck(path[id], dir_len + 1), trck, 10);
-                    strncpy(new_fid_data[fid_index], trck, 4);
-                }
 
                 int new_len_data = write_new_len(strlen(new_fid_data[fid_index]), f, 0);
                 int remaining_metadata_sz = header_metainfo.metadata_sz - (bytes_read + 10 + len_data);
@@ -316,6 +350,13 @@ int main(int argc, char *argv[]) {
         // Append necessary new frames
         for (int i = 0; i < E_FIDS; i++) {
             if (!frames_edited[i]) {
+                // Special case for TRCK frame and retrieving track number from filename
+                if (strncmp(fids[i], "TRCK", 4) == 0) {
+                    char trck[4] = {'\0'};
+                    itoa(get_trck(path[id], dir_len + 1), trck, 10);
+                    strncpy(new_fid_data[i], trck, 4);
+                }
+
                 ID3V2_FRAME_HEADER frame_header;               
                 char flags[2] = {'\0'};
                 strncpy(frame_header.fid, fids[i], 4);

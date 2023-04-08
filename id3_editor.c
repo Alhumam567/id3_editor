@@ -70,18 +70,23 @@ void parse_args(int argc, char *argv[],
             case 't': // TIT2: Title
                 if (strlen(optarg) > 256) errflag++;
                 else {
-                    strncpy(edit_fids_str[2], optarg, strlen(optarg));   
-                    printf("Option detected: %s - %s\n", edit_fids[2], edit_fids_str[2]);
-                
-                    frame_args[2] = 0;
-
                     char titles[256];
-                    strncpy(titles, optarg, strlen(optarg));
+                    strncpy(titles, optarg, strlen(optarg));   
+
                     char *tok = strtok(titles, ",");
                     while (tok != NULL) {
                         (*num_titles)++;
                         tok = strtok(NULL, ",");
                     }
+
+                    strncpy(titles, optarg, strlen(optarg)); 
+                    if (*num_titles > 1) {
+                        tok = strtok(titles, ",");   
+                        strncpy(edit_fids_str[2], tok, strlen(tok));
+                    }
+
+                    frame_args[2] = 0;
+                    printf("Option detected: %s - %s\n", edit_fids[2], edit_fids_str[2]);
                 }
                 break;
             case 'n': // TRCK: Track number
@@ -280,10 +285,6 @@ int main(int argc, char *argv[]) {
     else 
         printf("\tDir: false\n\n");
 
-    char titles[256];
-    strncpy(titles, new_fid_data[get_fid_index(fids, "TIT2")], 256);
-    char *init_tok = strtok(titles, ",");
-    strncpy(new_fid_data[get_fid_index(fids, "TIT2")], init_tok, strlen(init_tok));
 
     // Open, edit, and print ID3 metadata for each file  
     for (int id = 0; id < path_size; id++) {
@@ -304,7 +305,7 @@ int main(int argc, char *argv[]) {
         
         printf("Editing file...\n\n");
 
-        // Special case for TRCK frame and retrieving track number from filename
+        // Updating track name data for next file
         int trck_ind = get_fid_index(fids, "TRCK");
         if (frame_args[trck_ind] == 0) {
             char trck[4] = {'\0'};
@@ -312,6 +313,7 @@ int main(int argc, char *argv[]) {
             strncpy(new_fid_data[trck_ind], trck, 4);
         } 
 
+        // Updating title data for next file
         int tit2_ind = get_fid_index(fids, "TIT2");
         if (id > 0 && frame_args[tit2_ind] == 0 && num_titles > 1) { 
             char *tok = strtok(NULL, ",");
@@ -350,13 +352,6 @@ int main(int argc, char *argv[]) {
         // Append necessary new frames
         for (int i = 0; i < E_FIDS; i++) {
             if (!frames_edited[i]) {
-                // Special case for TRCK frame and retrieving track number from filename
-                if (strncmp(fids[i], "TRCK", 4) == 0) {
-                    char trck[4] = {'\0'};
-                    itoa(get_trck(path[id], dir_len + 1), trck, 10);
-                    strncpy(new_fid_data[i], trck, 4);
-                }
-
                 ID3V2_FRAME_HEADER frame_header;               
                 char flags[2] = {'\0'};
                 strncpy(frame_header.fid, fids[i], 4);

@@ -37,7 +37,13 @@ int write_new_len(int new_len, FILE *f, int verbose) {
 }
 
 
-
+/**
+ * @brief Writes frame data when file pointer points to the beginning of the frame
+ * data block.
+ * 
+ * @param data - New data to be written 
+ * @param f - File pointer
+ */
 void write_frame_data(char *data, FILE *f) {
     fseek(f, 1, SEEK_CUR);
 
@@ -51,7 +57,13 @@ void write_frame_data(char *data, FILE *f) {
 }
 
 
-
+/**
+ * @brief Writes frame header when file pointer points to the beginning of the frame
+ * header block.
+ * 
+ * @param data - New data to be written 
+ * @param f - File pointer
+ */
 void write_frame_header(ID3V2_FRAME_HEADER header, FILE *f) {
     fseek(f, 0, SEEK_CUR);
 
@@ -119,31 +131,30 @@ int overwrite_frame_data(char *new_data, int old_data_sz, int remaining_metadata
     fseek(f, -1 * old_data_sz, SEEK_CUR);
     free(null_buf);
 
-    int new_len = strlen(new_data);
+    int new_len = strlen(new_data) + 1; // Includes null byte in total length
 
-    if (new_len + 1 > old_data_sz) {
+    if (new_len > old_data_sz) {
         fseek(f, old_data_sz, SEEK_CUR);
 
-        rewrite_buffer(new_len + 1 - old_data_sz, remaining_metadata_sz, 0, f);
+        rewrite_buffer(new_len - old_data_sz, remaining_metadata_sz, 0, f);
 
         fseek(f, -1 * new_len, SEEK_CUR);
-        fwrite(new_data, new_len, 1, f);
-    } else if (new_len + 1 == old_data_sz) {
-        fseek(f, 1, SEEK_CUR);
-        fwrite(new_data, new_len, 1, f);    
+        write_frame_data(new_data, f);
+    } else if (new_len == old_data_sz) {
+        write_frame_data(new_data, f);
     } else {
         fseek(f, old_data_sz, SEEK_CUR);
 
-        rewrite_buffer(new_len + 1 - old_data_sz, remaining_metadata_sz, 1, f);
+        rewrite_buffer(new_len - old_data_sz, remaining_metadata_sz, 1, f);
 
         fseek(f, -1 * new_len, SEEK_CUR);
-        fwrite(new_data, new_len, 1, f);
+        write_frame_data(new_data, f);
     }
 
-    fseek(f,-1 * (new_len + 1),SEEK_CUR);
+    fseek(f,-1 * new_len,SEEK_CUR);
     fflush(f);
 
-    return new_len + 1;
+    return new_len;
 }
 
 

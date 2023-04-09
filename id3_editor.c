@@ -302,8 +302,6 @@ int main(int argc, char *argv[]) {
         
         int frames_edited[E_FIDS];
         memcpy(frames_edited, frame_args, sizeof(frames_edited));
-        
-        printf("Editing file...\n\n");
 
         // Updating track name data for next file
         int trck_ind = get_fid_index(fids, "TRCK");
@@ -325,17 +323,25 @@ int main(int argc, char *argv[]) {
         char *data;
         char fid_str[5] = {'\0'};
 
+        printf("Editing file...\n\n");
+
         // Search and edit existing frames
         for(int i = 0; i < header_metainfo.frame_count; i++) {
             ID3V2_FRAME_HEADER frame_header;
             read_frame_header(&frame_header, f);    
 
-            int len_data = get_frame_data_len(frame_header);
             strncpy(fid_str, frame_header.fid, 4);
             int fid_index = get_fid_index(fids, fid_str);
+            int len_data = get_frame_data_len(frame_header);
 
-            // If frame is editable and argument passed for editing it
-            if (fid_index != -1 && frame_args[fid_index] == 0) {
+            int readonly = 0;
+            int additional_bytes = parse_flags(frame_header.flags, &readonly);
+
+            // If frame not readonly, is editable, and must be edited
+            if (!readonly && 
+                fid_index != -1 &&
+                frame_args[fid_index] == 0) {
+
                 frames_edited[fid_index] = 1;
 
                 int new_len_data = write_new_len(strlen(new_fid_data[fid_index]), f, 0);
@@ -346,7 +352,7 @@ int main(int argc, char *argv[]) {
             }
 
             read_frame_data(f, len_data);
-            bytes_read += 10 + len_data; 
+            bytes_read += sizeof(ID3V2_FRAME_HEADER) + additional_bytes + len_data; 
         }
 
         // Append necessary new frames
@@ -370,7 +376,7 @@ int main(int argc, char *argv[]) {
             }
         }
         
-        // Print all ID3 data
+        // Print all ID3 tags
         printf("Reading %s metadata :\n\n", path[id]);
         print_data(f, header_metainfo);
 

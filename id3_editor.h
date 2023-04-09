@@ -3,6 +3,9 @@
 
 #include <stdio.h>
 
+#define IS_SET(X,Y) ((X >> Y) & 0b1)
+#define IS_READONLY(X) IS_SET(X,4)
+
 #define E_FIDS 4
 
 char fids[E_FIDS][5] = {"TPE1", "TALB", "TIT2", "TRCK"};

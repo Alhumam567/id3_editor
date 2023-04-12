@@ -19,8 +19,6 @@ int get_frame_data_len(ID3V2_FRAME_HEADER h) {
  * @return int - returns new length
  */
 int write_new_len(int new_len, FILE *f, int verbose) {
-    fseek(f, -6, SEEK_CUR); // Seek back to frame header size 
-
     char synchsafe_nl[4];
     intToSynchsafeint32(new_len + 1, synchsafe_nl);
     
@@ -30,8 +28,6 @@ int write_new_len(int new_len, FILE *f, int verbose) {
     }
     
     fwrite(synchsafe_nl, 1, 4, f);
-
-    fseek(f, 2, SEEK_CUR); // Seek past frame header flag
 
     return new_len + 1;
 }
@@ -78,9 +74,21 @@ void write_frame_header(ID3V2_FRAME_HEADER header, FILE *f) {
 
 
 
-void write_new_frame(ID3V2_FRAME_HEADER header, char *data, FILE *f) {
+void append_new_frame(ID3V2_FRAME_HEADER header, char *data, FILE *f) {
     write_frame_header(header, f);
     write_frame_data(data, f);
+}
+
+
+
+void edit_frame_data(char *data, int *prev_len_data, int remaining_metadata_sz, int additional_bytes, FILE *f) {
+    fseek(f, -1 * (6 + additional_bytes), SEEK_CUR); 
+    int new_len_data = write_new_len(strlen(data), f, 0);
+    fseek(f, 2 + additional_bytes, SEEK_CUR); 
+
+    overwrite_frame_data(data, *prev_len_data, remaining_metadata_sz, f);
+
+    *prev_len_data = new_len_data;
 }
 
 
@@ -210,7 +218,7 @@ void print_data(FILE *f, ID3_METAINFO metainfo) {
         ID3V2_FRAME_HEADER frame_header;
 
         int readonly = 0;
-        int additional_bytes = parse_frame_header_flags(frame_header.flags, &readonly);
+        int additional_bytes = parse_frame_header_flags(frame_header.flags, &readonly, f);
         
         if (fread(frame_header.fid, 1, 4, f) != 4) {
             printf("Error occurred reading file identifier.\n");

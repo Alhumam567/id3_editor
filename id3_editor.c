@@ -235,7 +235,7 @@ void parse_args(int argc, char *argv[],
  * @param fid - Frame ID string
  * @return int - Index of given frame ID
  */
-int get_fid_index(char fids[E_FIDS][5], char *fid) {
+int get_fid_index(char fids[E_FIDS][5], char fid[4]) {
     for (int i = 0; i < E_FIDS; i++) {
         if (strncmp(fids[i], fid, 4) == 0) return i;
     }
@@ -323,36 +323,26 @@ int main(int argc, char *argv[]) {
         }
 
         int bytes_read = 0;
-        int metadata_sz = header_metainfo.metadata_sz;
-        char *data;
-        char fid_str[5] = {'\0'};
 
         printf("Editing file...\n\n");
 
         // Search and edit existing frames
         for(int i = 0; i < header_metainfo.frame_count; i++) {
             ID3V2_FRAME_HEADER frame_header;
-            read_frame_header(&frame_header, f);    
+            read_frame_header(&frame_header, f);
 
-            strncpy(fid_str, frame_header.fid, 4);
-            int fid_index = get_fid_index(fids, fid_str);
+            int fid_index = get_fid_index(fids, frame_header.fid);
             int len_data = get_frame_data_len(frame_header);
 
             int readonly = 0;
-            int additional_bytes = parse_frame_header_flags(frame_header.flags, &readonly);
+            int additional_bytes = parse_frame_header_flags(frame_header.flags, &readonly, f);
 
             // If frame not readonly, is editable, and must be edited
-            if (!readonly && 
-                fid_index != -1 &&
-                frame_args[fid_index] == 0) {
-
+            if (!readonly && fid_index != -1 && frame_args[fid_index] == 0) {
                 frames_edited[fid_index] = 1;
 
-                int new_len_data = write_new_len(strlen(new_fid_data[fid_index]), f, 0);
                 int remaining_metadata_sz = header_metainfo.metadata_sz - (bytes_read + sizeof(ID3V2_FRAME_HEADER) + len_data);
-                overwrite_frame_data(new_fid_data[fid_index], len_data, remaining_metadata_sz, f);  
-
-                len_data = new_len_data;
+                edit_frame_data(new_fid_data[fid_index], &len_data, remaining_metadata_sz, additional_bytes, f);
             }
 
             read_frame_data(f, len_data);
@@ -362,14 +352,16 @@ int main(int argc, char *argv[]) {
         // Append necessary new frames
         for (int i = 0; i < E_FIDS; i++) {
             if (!frames_edited[i]) {
-                ID3V2_FRAME_HEADER frame_header;               
-                char flags[2] = {'\0'};
+                // Construct new frame header
+                ID3V2_FRAME_HEADER frame_header;
+                char flags[2] = {'\0', '\0'};
                 strncpy(frame_header.fid, fids[i], 4);
                 int_to_header_ssint(1 + strlen(new_fid_data[i]), frame_header.size);
                 strncpy(frame_header.flags, flags, 2);
 
-                write_new_frame(frame_header, new_fid_data[i], f);
+                append_new_frame(frame_header, new_fid_data[i], f);
                 
+                // Update metainfo struct
                 char (*tmp_fids)[4] = malloc((header_metainfo.frame_count+1) * sizeof(char *));
                 for (int j = 0; j < header_metainfo.frame_count; j++) strncpy(tmp_fids[j], header_metainfo.fids[j], 4);
                 strncpy(tmp_fids[header_metainfo.frame_count], fids[i], 4);

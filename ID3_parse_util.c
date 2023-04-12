@@ -151,13 +151,14 @@ ID3_METAINFO *get_ID3_metainfo(ID3_METAINFO *metainfo, ID3V2_HEADER *header, FIL
 
 /**
  * @brief Parses frame header flags to calculate any additional bytes added through 
- * data length indicator bits, encryption bits, etc..
+ * data length indicator bits, encryption bits, etc.. and reads past their position to 
+ * setup for reading frame data
  * 
  * @param flags - Flags where flag[0] is the frame status byte, and flag[1] is the frame format byte
  * @param readonly - Boolean for readonly bit 
  * @return int - Number of additional bytes between frame header and frame data
  */
-int parse_frame_header_flags(char flags[2], int *readonly) {
+int parse_frame_header_flags(char flags[2], int *readonly, FILE *f) {
     int additional_bytes = 0;
 
     if (IS_READONLY(flags[0])) *readonly = 1;
@@ -165,6 +166,8 @@ int parse_frame_header_flags(char flags[2], int *readonly) {
     if (IS_SET(flags[1], 6)) additional_bytes++; // Grouping Identity Byte
     if (IS_SET(flags[1], 2)) additional_bytes++; // Encryption Type Byte
     if (IS_SET(flags[1], 0)) additional_bytes+=4; // Data length indicator bit set, additional synchsafe int
+
+    fseek(f, additional_bytes, SEEK_CUR);
 
     return additional_bytes; 
 }

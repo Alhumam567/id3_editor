@@ -208,6 +208,9 @@ void print_data(FILE *f, ID3_METAINFO metainfo) {
     // Read Final Data
     for (int i = 0; i < frames; i++) {
         ID3V2_FRAME_HEADER frame_header;
+
+        int readonly = 0;
+        int additional_bytes = parse_frame_header_flags(frame_header.flags, &readonly);
         
         if (fread(frame_header.fid, 1, 4, f) != 4) {
             printf("Error occurred reading file identifier.\n");
@@ -247,6 +250,6 @@ void print_data(FILE *f, ID3_METAINFO metainfo) {
 
         free(data);
 
-        bytes_read += 10 + frame_data_sz; 
+        bytes_read += sizeof(ID3V2_FRAME_HEADER) + frame_data_sz + additional_bytes; 
     }
 }

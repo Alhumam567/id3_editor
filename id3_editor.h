@@ -14,7 +14,7 @@ typedef struct ID3V2_HEADER {
     char fid[3];
     char ver[2];
     char flags;
-    char size[4];
+    char size[4]; // Tota
 } ID3V2_HEADER;
 
 typedef struct ID3V2_FRAME_HEADER {
@@ -24,9 +24,10 @@ typedef struct ID3V2_FRAME_HEADER {
 } ID3V2_FRAME_HEADER;
 
 typedef struct ID3_METAINFO {
-    int metadata_sz;
+    int metadata_sz; // Size in bytes of used metadata
     int frame_count;
     char (*fids)[4];
+    int frame_pos;
 } ID3_METAINFO;
 
 #endif

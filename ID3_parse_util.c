@@ -98,7 +98,7 @@ ID3_METAINFO *get_ID3_metainfo(ID3_METAINFO *metainfo, ID3V2_HEADER *header, FIL
         ID3V2_FRAME_HEADER frame_header;
         if (fread(frame_header.fid, 1, 4, f) != 4) {
             printf("Error occurred reading file identifier.\n");
-            exit(1);
+            exit(1);    
         }
 
         // End of frame data
@@ -149,8 +149,15 @@ ID3_METAINFO *get_ID3_metainfo(ID3_METAINFO *metainfo, ID3V2_HEADER *header, FIL
 }
 
 
-
-int parse_flags(char flags[2], int *readonly) {
+/**
+ * @brief Parses frame header flags to calculate any additional bytes added through 
+ * data length indicator bits, encryption bits, etc..
+ * 
+ * @param flags - Flags where flag[0] is the frame status byte, and flag[1] is the frame format byte
+ * @param readonly - Boolean for readonly bit 
+ * @return int - Number of additional bytes between frame header and frame data
+ */
+int parse_frame_header_flags(char flags[2], int *readonly) {
     int additional_bytes = 0;
 
     if (IS_READONLY(flags[0])) *readonly = 1;

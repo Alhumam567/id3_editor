@@ -43,6 +43,7 @@ void parse_args(int argc, char *argv[],
         exit(1);
     }
 
+    for (int i = 0; i < E_FIDS; i++) printf("%d\n", frame_args[i]);
     int opt, errflag=0;
     extern char *optarg;
     extern int optind, optopt;
@@ -117,6 +118,8 @@ void parse_args(int argc, char *argv[],
         }
     }
 
+    for (int i = 0; i < E_FIDS; i++) printf("%d\n", frame_args[i]);
+
     if (errflag) exit(1);
 
     // Read filepath argument
@@ -173,7 +176,7 @@ void parse_args(int argc, char *argv[],
 
         // Validate number of files with number of titles
         if (frame_args[2] == 0 && (*num_titles != 1 && *num_titles != file_count)) {
-            printf("Error, number of titles provided is invalid with the number of files being edited.\n");
+            printf("Error, number of titles provided is invalid with the number of files being edited. 1\n");
             exit(0);
         }
 
@@ -264,7 +267,8 @@ int main(int argc, char *argv[]) {
     int path_size; //Number of files in <path>;
     int dir_len; //Length of directory prefix in filepath
 
-    int frame_args[E_FIDS] = { 1 }; //Array of bool flags representing frames that need to be edited
+    int frame_args[E_FIDS]; //Array of bool flags representing frames that need to be edited
+    for (int i = 0; i < E_FIDS; i++) frame_args[i] = 1;
     char new_fid_data[E_FIDS][256] = {'\0'}; //New frame data
     int num_titles = 0;
 
@@ -305,7 +309,7 @@ int main(int argc, char *argv[]) {
 
         // Updating track name data for next file
         int trck_ind = get_fid_index(fids, "TRCK");
-        if (frame_args[trck_ind] == 0) {
+        if (frames_edited[trck_ind] == 0) {
             char trck[4] = {'\0'};
             itoa(get_trck(path[id], dir_len + 1), trck, 10);
             strncpy(new_fid_data[trck_ind], trck, 4);
@@ -313,7 +317,7 @@ int main(int argc, char *argv[]) {
 
         // Updating title data for next file
         int tit2_ind = get_fid_index(fids, "TIT2");
-        if (id > 0 && frame_args[tit2_ind] == 0 && num_titles > 1) { 
+        if (id > 0 && frames_edited[tit2_ind] == 0 && num_titles > 1) { 
             char *tok = strtok(NULL, ",");
             strncpy(new_fid_data[tit2_ind], tok, strlen(tok));
         }
@@ -335,7 +339,7 @@ int main(int argc, char *argv[]) {
             int len_data = get_frame_data_len(frame_header);
 
             int readonly = 0;
-            int additional_bytes = parse_flags(frame_header.flags, &readonly);
+            int additional_bytes = parse_frame_header_flags(frame_header.flags, &readonly);
 
             // If frame not readonly, is editable, and must be edited
             if (!readonly && 
@@ -345,7 +349,7 @@ int main(int argc, char *argv[]) {
                 frames_edited[fid_index] = 1;
 
                 int new_len_data = write_new_len(strlen(new_fid_data[fid_index]), f, 0);
-                int remaining_metadata_sz = header_metainfo.metadata_sz - (bytes_read + 10 + len_data);
+                int remaining_metadata_sz = header_metainfo.metadata_sz - (bytes_read + sizeof(ID3V2_FRAME_HEADER) + len_data);
                 overwrite_frame_data(new_fid_data[fid_index], len_data, remaining_metadata_sz, f);  
 
                 len_data = new_len_data;

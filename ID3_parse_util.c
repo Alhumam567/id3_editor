@@ -76,6 +76,39 @@ ID3V2_FRAME_HEADER *read_frame_header(ID3V2_FRAME_HEADER *h, FILE *f) {
 }
 
 
+
+int parse_ext_header_flags(ID3V2_EXT_HEADER *ext_header, FILE *f) {
+    fread(ext_header->size, 4, 1, f);
+    int ext_header_sz = synchsafeint32ToInt(ext_header->size);
+
+    fread(&(ext_header->num_bytes), 1, 1, f);
+    if (ext_header->num_bytes != 1) {
+        printf("Error reading extended header, number of flag bytes is not 1.\n");
+        exit(1);
+    }
+
+    fread(&(ext_header->flags), 1, 1, f);
+
+    fseek(f, ext_header_sz - 6, SEEK_CUR);
+
+    return ext_header_sz;
+}
+
+
+
+int parse_header_flags(char flags, FILE *f) {
+    int frame_pos = 0;
+
+    if (IS_SET(flags, 6)) { // Extended Header bit
+        ID3V2_EXT_HEADER ext_header;
+        frame_pos = parse_ext_header_flags(&ext_header, f) + sizeof(ID3V2_FRAME_HEADER);
+    }
+
+    return frame_pos;
+}
+
+
+
 /**
  * @brief Get the ID3 meta info (list of frames, size of metadata block) used for efficiently traversing file. 
  * File pointer will be moved to the end of ID3 header. 
@@ -87,7 +120,9 @@ ID3V2_FRAME_HEADER *read_frame_header(ID3V2_FRAME_HEADER *h, FILE *f) {
  * @return ID3_METAINFO* - returns pointer to metainfo struct <metainfo>
  */
 ID3_METAINFO *get_ID3_metainfo(ID3_METAINFO *metainfo, ID3V2_HEADER *header, FILE *f, int verbose) {
-    fseek(f, 10, SEEK_SET);
+    fseek(f, 10, SEEK_SET); // Set FILE * to end of header
+
+    metainfo->frame_pos = parse_header_flags(header->flags, f); // Parse header flags and seek past extended header if necessary
 
     int sz = 0;
     int frames = 0;

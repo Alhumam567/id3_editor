@@ -81,18 +81,6 @@ void append_new_frame(ID3V2_FRAME_HEADER header, char *data, FILE *f) {
 
 
 
-void edit_frame_data(char *data, int *prev_len_data, int remaining_metadata_sz, int additional_bytes, FILE *f) {
-    fseek(f, -1 * (6 + additional_bytes), SEEK_CUR); 
-    int new_len_data = write_new_len(strlen(data), f, 0);
-    fseek(f, 2 + additional_bytes, SEEK_CUR); 
-
-    overwrite_frame_data(data, *prev_len_data, remaining_metadata_sz, f);
-
-    *prev_len_data = new_len_data;
-}
-
-
-
 /**
  * @brief Helper function for rewriting a buffer of bytes in order to accommodate larger
  * and smaller frame data for intermediate frames. Buffer of size <remaining_metadata_size>
@@ -193,6 +181,18 @@ int read_frame_data(FILE *f, int len_data) {
     free(data);
 
     return len_data;
+}
+
+
+
+void edit_frame_data(char *data, int *prev_len_data, int remaining_metadata_sz, int additional_bytes, FILE *f) {
+    fseek(f, -1 * (6 + additional_bytes), SEEK_CUR); 
+    int new_len_data = write_new_len(strlen(data), f, 0);
+    fseek(f, 2 + additional_bytes, SEEK_CUR); 
+
+    overwrite_frame_data(data, *prev_len_data, remaining_metadata_sz, f);
+
+    *prev_len_data = new_len_data;
 }
 
 

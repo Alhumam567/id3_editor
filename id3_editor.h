@@ -14,8 +14,14 @@ typedef struct ID3V2_HEADER {
     char fid[3];
     char ver[2];
     char flags;
-    char size[4]; // Tota
+    char size[4]; 
 } ID3V2_HEADER;
+
+typedef struct ID3V2_EXT_HEADER {
+    char size[4];
+    char num_bytes;
+    char flags;
+} ID3V2_EXT_HEADER;
 
 typedef struct ID3V2_FRAME_HEADER {
     char fid[4];

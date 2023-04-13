@@ -108,6 +108,29 @@ int parse_header_flags(char flags, FILE *f) {
 }
 
 
+/**
+ * @brief Parses frame header flags to calculate any additional bytes added through 
+ * data length indicator bits, encryption bits, etc.. and reads past their position to 
+ * setup for reading frame data
+ * 
+ * @param flags - Flags where flag[0] is the frame status byte, and flag[1] is the frame format byte
+ * @param readonly - Boolean for readonly bit 
+ * @return int - Number of additional bytes between frame header and frame data
+ */
+int parse_frame_header_flags(char flags[2], int *readonly, FILE *f) {
+    int additional_bytes = 0;
+
+    if (IS_READONLY(flags[0])) *readonly = 1;
+
+    if (IS_SET(flags[1], 6)) additional_bytes++; // Grouping Identity Byte
+    if (IS_SET(flags[1], 2)) additional_bytes++; // Encryption Type Byte
+    if (IS_SET(flags[1], 0)) additional_bytes+=4; // Data length indicator bit set, additional synchsafe int
+
+    fseek(f, additional_bytes, SEEK_CUR);
+
+    return additional_bytes; 
+}
+
 
 /**
  * @brief Get the ID3 meta info (list of frames, size of metadata block) used for efficiently traversing file. 
@@ -140,17 +163,24 @@ ID3_METAINFO *get_ID3_metainfo(ID3_METAINFO *metainfo, ID3V2_HEADER *header, FIL
         if (strlen(frame_header.fid) == 0) break;
 
         if (fread(frame_header.size, 1, 4, f) != 4) {
-            printf("Error occurred tag size.\n");
+            printf("Error occurred reading tag size.\n");
             exit(1);
         }
-        int frame_data_sz = synchsafeint32ToInt(frame_header.size);
+        if (fread(frame_header.flags, 2, 1, f) != 2) {
+            printf("Error occurred reading frame flags.\n");
+            exit(1);
+        }
 
-        fseek(f, 2+frame_data_sz, SEEK_CUR);
-        sz += 4 + 4 + 2 + frame_data_sz; // #fid_bytes + #sz_bytes + #flags_bytes + size of frame data
+        int readonly = 0;
+        int additional_bytes = parse_frame_header_flags(frame_header.flags, &readonly, f);
+
+        int frame_data_sz = synchsafeint32ToInt(frame_header.size);
+        fseek(f, frame_data_sz, SEEK_CUR);
+        sz += sizeof(ID3V2_FRAME_HEADER) + additional_bytes + frame_data_sz; // #fid_bytes + #sz_bytes + #flags_bytes + size of frame data
         frames += 1;
     }
 
-    fseek(f, 10, SEEK_SET);
+    fseek(f, metainfo->frame_pos, SEEK_SET);
 
     metainfo->metadata_sz = sz;
     metainfo->frame_count = frames;
@@ -179,30 +209,6 @@ ID3_METAINFO *get_ID3_metainfo(ID3_METAINFO *metainfo, ID3V2_HEADER *header, FIL
         printf("\n\n");
     }
 
-    fseek(f, 10, SEEK_SET);
+    fseek(f, metainfo->frame_pos, SEEK_SET);
     return metainfo;
-}
-
-
-/**
- * @brief Parses frame header flags to calculate any additional bytes added through 
- * data length indicator bits, encryption bits, etc.. and reads past their position to 
- * setup for reading frame data
- * 
- * @param flags - Flags where flag[0] is the frame status byte, and flag[1] is the frame format byte
- * @param readonly - Boolean for readonly bit 
- * @return int - Number of additional bytes between frame header and frame data
- */
-int parse_frame_header_flags(char flags[2], int *readonly, FILE *f) {
-    int additional_bytes = 0;
-
-    if (IS_READONLY(flags[0])) *readonly = 1;
-
-    if (IS_SET(flags[1], 6)) additional_bytes++; // Grouping Identity Byte
-    if (IS_SET(flags[1], 2)) additional_bytes++; // Encryption Type Byte
-    if (IS_SET(flags[1], 0)) additional_bytes+=4; // Data length indicator bit set, additional synchsafe int
-
-    fseek(f, additional_bytes, SEEK_CUR);
-
-    return additional_bytes; 
 }

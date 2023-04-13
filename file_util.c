@@ -211,7 +211,7 @@ void print_data(FILE *f, ID3_METAINFO metainfo) {
     char *data;
     char fid_str[5] = {'\0'};
 
-    fseek(f, 10, SEEK_SET);
+    fseek(f, metainfo.frame_pos, SEEK_SET);
     
     // Read Final Data
     for (int i = 0; i < frames; i++) {

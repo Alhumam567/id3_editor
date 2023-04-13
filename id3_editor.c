@@ -270,6 +270,7 @@ int main(int argc, char *argv[]) {
     int frame_args[E_FIDS]; //Array of bool flags representing frames that need to be edited
     for (int i = 0; i < E_FIDS; i++) frame_args[i] = 1;
     char new_fid_data[E_FIDS][256] = {'\0'}; //New frame data
+    memset(new_fid_data, 0, E_FIDS*256);
     int num_titles = 0;
 
     parse_args(argc, argv, fids, frame_args, new_fid_data, E_FIDS, &path, &path_size, &dir_len, &num_titles);

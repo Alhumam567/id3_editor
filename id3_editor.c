@@ -312,7 +312,7 @@ int main(int argc, char *argv[]) {
         int trck_ind = get_fid_index(fids, "TRCK");
         if (frames_edited[trck_ind] == 0) {
             char trck[4] = {'\0'};
-            itoa(get_trck(path[id], dir_len + 1), trck, 10);
+            snprintf(trck, 4, "%d", get_trck(path[id], dir_len + 1));
             strncpy(new_fid_data[trck_ind], trck, 4);
         } 
 

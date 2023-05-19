@@ -323,6 +323,12 @@ int main(int argc, char *argv[]) {
             strncpy(new_fid_data[tit2_ind], tok, strlen(tok));
         }
 
+        // Calculate if total id3 metadata size needs to be increased 
+        int additional_mtdt_sz = 0;
+        // for (int i = 0; i < header_metainfo.frame_count; i++) {
+        //     additional_mtdt_sz += fidget_fid_index(fids, header_metainfo.fids[i]) > header_metainfo.fid_sz[i]
+        // }
+
         int bytes_read = 0;
 
         printf("Editing file...\n\n");

@@ -33,6 +33,7 @@ typedef struct ID3_METAINFO {
     int metadata_sz; // Size in bytes of used metadata
     int frame_count;
     char (*fids)[4];
+    int fid_sz[E_FIDS];
     int frame_pos;
 } ID3_METAINFO;
 

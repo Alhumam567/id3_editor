@@ -216,9 +216,6 @@ void print_data(FILE *f, ID3_METAINFO metainfo) {
     // Read Final Data
     for (int i = 0; i < frames; i++) {
         ID3V2_FRAME_HEADER frame_header;
-
-        int readonly = 0;
-        int additional_bytes = parse_frame_header_flags(frame_header.flags, &readonly, f);
         
         if (fread(frame_header.fid, 1, 4, f) != 4) {
             printf("Error occurred reading file identifier.\n");
@@ -232,6 +229,10 @@ void print_data(FILE *f, ID3_METAINFO metainfo) {
             printf("Error occurred flags.\n");
             exit(1);
         }
+
+        int readonly = 0;
+        int additional_bytes = parse_frame_header_flags(frame_header.flags, &readonly, f);
+
         int frame_data_sz = synchsafeint32ToInt(frame_header.size);
         strncpy(fid_str, frame_header.fid, 4);
 

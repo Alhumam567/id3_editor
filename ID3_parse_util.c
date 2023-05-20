@@ -97,7 +97,7 @@ int parse_ext_header_flags(ID3V2_EXT_HEADER *ext_header, FILE *f) {
 
 
 int parse_header_flags(char flags, FILE *f) {
-    int frame_pos = 0;
+    int frame_pos = 10;
 
     if (IS_SET(flags, 6)) { // Extended Header bit
         ID3V2_EXT_HEADER ext_header;
@@ -125,7 +125,7 @@ int parse_frame_header_flags(char flags[2], int *readonly, FILE *f) {
     if (IS_SET(flags[1], 6)) additional_bytes++; // Grouping Identity Byte
     if (IS_SET(flags[1], 2)) additional_bytes++; // Encryption Type Byte
     if (IS_SET(flags[1], 0)) additional_bytes+=4; // Data length indicator bit set, additional synchsafe int
-
+    
     fseek(f, additional_bytes, SEEK_CUR);
 
     return additional_bytes; 
@@ -166,7 +166,7 @@ ID3_METAINFO *get_ID3_metainfo(ID3_METAINFO *metainfo, ID3V2_HEADER *header, FIL
             printf("Error occurred reading tag size.\n");
             exit(1);
         }
-        if (fread(frame_header.flags, 2, 1, f) != 2) {
+        if (fread(frame_header.flags, 1, 2, f) != 2) {
             printf("Error occurred reading frame flags.\n");
             exit(1);
         }
@@ -181,10 +181,11 @@ ID3_METAINFO *get_ID3_metainfo(ID3_METAINFO *metainfo, ID3V2_HEADER *header, FIL
     }
 
     fseek(f, metainfo->frame_pos, SEEK_SET);
-
+    
     metainfo->metadata_sz = sz;
     metainfo->frame_count = frames;
     metainfo->fids = calloc(frames, sizeof(char *));
+    metainfo->fid_sz = calloc(frames, sizeof(int));
 
     // Save ID3 frame IDs and sizes
     for (int i = 0; i < frames; i++) {
@@ -192,11 +193,15 @@ ID3_METAINFO *get_ID3_metainfo(ID3_METAINFO *metainfo, ID3V2_HEADER *header, FIL
             printf("Error occurred reading file identifier.\n");
             exit(1);
         }
-        if (fread(metainfo->fid_sz[i], 1, sizeof(int), f) != 4) {
+        char ss_sz[4];
+        if (fread(ss_sz, 1, 4, f) != 4) {
             printf("Error occurred tag size.\n");
             exit(1);
         }
+
         int frame_data_sz = synchsafeint32ToInt(ss_sz);
+        metainfo->fid_sz[i] = frame_data_sz;
+
         fseek(f, 2 + frame_data_sz, SEEK_CUR);
     }
 
@@ -204,10 +209,11 @@ ID3_METAINFO *get_ID3_metainfo(ID3_METAINFO *metainfo, ID3V2_HEADER *header, FIL
         printf("Metadata Size: %d\n", metainfo->metadata_sz);
         printf("Frame Count: %d\n", metainfo->frame_count);
         printf("Frames: ");
-        for (int i = 0; i < metainfo->frame_count; i++) printf("%.4s (%d);", metainfo->fids[i], metainfo->fid_sz[i]);
+        for (int i = 0; i < metainfo->frame_count; i++) printf("%.4s(%d);", metainfo->fids[i], metainfo->fid_sz[i]);
         printf("\n\n");
     }
 
     fseek(f, metainfo->frame_pos, SEEK_SET);
+    
     return metainfo;
 }

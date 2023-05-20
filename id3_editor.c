@@ -43,7 +43,6 @@ void parse_args(int argc, char *argv[],
         exit(1);
     }
 
-    for (int i = 0; i < E_FIDS; i++) printf("%d\n", frame_args[i]);
     int opt, errflag=0;
     extern char *optarg;
     extern int optind, optopt;
@@ -84,6 +83,8 @@ void parse_args(int argc, char *argv[],
                     if (*num_titles > 1) {
                         tok = strtok(titles, ",");   
                         strncpy(edit_fids_str[2], tok, strlen(tok));
+                    } else {
+                        strncpy(edit_fids_str[2], optarg, strlen(optarg));
                     }
 
                     frame_args[2] = 0;
@@ -117,8 +118,6 @@ void parse_args(int argc, char *argv[],
                 break;
         }
     }
-
-    for (int i = 0; i < E_FIDS; i++) printf("%d\n", frame_args[i]);
 
     if (errflag) exit(1);
 
@@ -323,11 +322,29 @@ int main(int argc, char *argv[]) {
             strncpy(new_fid_data[tit2_ind], tok, strlen(tok));
         }
 
-        // Calculate if total id3 metadata size needs to be increased 
+        // Calculate difference in size of new metadata info and current info
         int additional_mtdt_sz = 0;
-        // for (int i = 0; i < header_metainfo.frame_count; i++) {
-        //     additional_mtdt_sz += fidget_fid_index(fids, header_metainfo.fids[i]) > header_metainfo.fid_sz[i]
-        // }
+
+        for (int i = 0; i < E_FIDS; i++) {
+            char *fid = fids[i];
+
+            if (!frames_edited[i]) {
+                int exists = 0;
+
+                int j;
+                for (j = 0; j < header_metainfo.frame_count; j++) {
+                    if (strncmp(header_metainfo.fids[j], fid, 4) == 0) {
+                        exists = 1;
+                        break;
+                    }
+                }
+
+                if (exists) additional_mtdt_sz += strlen(new_fid_data[i]) - header_metainfo.fid_sz[j] + 1; 
+                else additional_mtdt_sz += sizeof(ID3V2_FRAME_HEADER) + strlen(new_fid_data[i]) + 1;
+            }
+        }
+
+        printf("Additional metadata size: %d\n", additional_mtdt_sz);
 
         int bytes_read = 0;
 
@@ -343,15 +360,14 @@ int main(int argc, char *argv[]) {
 
             int readonly = 0;
             int additional_bytes = parse_frame_header_flags(frame_header.flags, &readonly, f);
-
+            
             // If frame not readonly, is editable, and must be edited
-            if (!readonly && fid_index != -1 && frame_args[fid_index] == 0) {
+            if (!readonly && fid_index != -1 && frames_edited[fid_index] == 0) {
                 frames_edited[fid_index] = 1;
 
                 int remaining_metadata_sz = header_metainfo.metadata_sz - (bytes_read + sizeof(ID3V2_FRAME_HEADER) + len_data);
                 edit_frame_data(new_fid_data[fid_index], &len_data, remaining_metadata_sz, additional_bytes, f);
             }
-
             read_frame_data(f, len_data);
             bytes_read += sizeof(ID3V2_FRAME_HEADER) + additional_bytes + len_data; 
         }

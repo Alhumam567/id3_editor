@@ -50,6 +50,9 @@ ID3V2_HEADER *read_header(ID3V2_HEADER *header, FILE *f, char *filename, int ver
 }
 
 
+int parse_frame_header_flags(char flags[2], int *readonly, FILE *f);
+
+
 /**
  * @brief Reads ID3 tag frame header. File pointer must be pointing to the start
  * of the ID3 tag frame header. Moves file pointer to the end of frame header.

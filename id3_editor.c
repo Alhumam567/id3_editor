@@ -226,6 +226,25 @@ void parse_args(int argc, char *argv[],
 
 
 
+void print_args(int path_size, char **path, char new_fid_data[E_FIDS][256], int dir_len) {
+    // Print arguments
+    printf("Configuration: \n");
+    printf("\tEditing Files: %d\n", path_size);
+    for (int i = 0; i < path_size; i++) {
+        printf("\t\t%d. %s\n", i+1, path[i]);
+    }
+    printf("\tEditing strings: \n");
+    for (int i = 0; i < E_FIDS; i++) {
+        printf("\t\t%s: %s\n", fids[i], new_fid_data[i]);
+    }
+    if (dir_len > 0)
+        printf("\tDir: true\n\n");
+    else 
+        printf("\tDir: false\n\n");
+}
+
+
+
 /**
  * @brief Reverse lookup for frame ID to index
  * 
@@ -240,6 +259,17 @@ int get_fid_index(char fids[E_FIDS][5], char fid[4]) {
     }
 
     return -1;
+}
+
+
+/**
+ * @brief Free header metainfo data
+ * 
+ * @param metainfo - pointer to metainfo struct to free data 
+ */
+void free_id3_data(ID3_METAINFO *metainfo) {
+    free(metainfo->fids);
+    free(metainfo->fid_sz);
 }
 
 
@@ -268,27 +298,12 @@ int main(int argc, char *argv[]) {
 
     int frame_args[E_FIDS]; //Array of bool flags representing frames that need to be edited
     for (int i = 0; i < E_FIDS; i++) frame_args[i] = 1;
-    char new_fid_data[E_FIDS][256] = {'\0'}; //New frame data
+    char new_fid_data[E_FIDS][256]; //New frame data
     memset(new_fid_data, 0, E_FIDS*256);
     int num_titles = 0;
 
     parse_args(argc, argv, fids, frame_args, new_fid_data, E_FIDS, &path, &path_size, &dir_len, &num_titles);
-
-    // Print arguments
-    printf("Configuration: \n");
-    printf("\tEditing Files: %d\n", path_size);
-    for (int i = 0; i < path_size; i++) {
-        printf("\t\t%d. %s\n", i+1, path[i]);
-    }
-    printf("\tEditing strings: \n");
-    for (int i = 0; i < E_FIDS; i++) {
-        printf("\t\t%s: %s\n", fids[i], new_fid_data[i]);
-    }
-    if (dir_len > 0)
-        printf("\tDir: true\n\n");
-    else 
-        printf("\tDir: false\n\n");
-
+    print_args(path_size, path, new_fid_data, dir_len);
 
     // Open, edit, and print ID3 metadata for each file  
     for (int id = 0; id < path_size; id++) {
@@ -322,29 +337,8 @@ int main(int argc, char *argv[]) {
             strncpy(new_fid_data[tit2_ind], tok, strlen(tok));
         }
 
-        // Calculate difference in size of new metadata info and current info
-        int additional_mtdt_sz = 0;
-
-        for (int i = 0; i < E_FIDS; i++) {
-            char *fid = fids[i];
-
-            if (!frames_edited[i]) {
-                int exists = 0;
-
-                int j;
-                for (j = 0; j < header_metainfo.frame_count; j++) {
-                    if (strncmp(header_metainfo.fids[j], fid, 4) == 0) {
-                        exists = 1;
-                        break;
-                    }
-                }
-
-                if (exists) additional_mtdt_sz += strlen(new_fid_data[i]) - header_metainfo.fid_sz[j] + 1; 
-                else additional_mtdt_sz += sizeof(ID3V2_FRAME_HEADER) + strlen(new_fid_data[i]) + 1;
-            }
-        }
-
-        printf("Additional metadata size: %d\n", additional_mtdt_sz);
+        // Calculate new metadata size to predict if metadata header has to be extended
+        extend_header(fids, frames_edited, header_metainfo, header, new_fid_data, f, path[id]);
 
         int bytes_read = 0;
 
@@ -374,31 +368,33 @@ int main(int argc, char *argv[]) {
 
         // Append necessary new frames
         for (int i = 0; i < E_FIDS; i++) {
-            if (!frames_edited[i]) {
-                // Construct new frame header
-                ID3V2_FRAME_HEADER frame_header;
-                char flags[2] = {'\0', '\0'};
-                strncpy(frame_header.fid, fids[i], 4);
-                int_to_header_ssint(1 + strlen(new_fid_data[i]), frame_header.size);
-                strncpy(frame_header.flags, flags, 2);
+            if (frames_edited[i]) continue;
 
-                append_new_frame(frame_header, new_fid_data[i], f);
-                
-                // Update metainfo struct
-                char (*tmp_fids)[4] = malloc((header_metainfo.frame_count+1) * sizeof(char *));
-                for (int j = 0; j < header_metainfo.frame_count; j++) strncpy(tmp_fids[j], header_metainfo.fids[j], 4);
-                strncpy(tmp_fids[header_metainfo.frame_count], fids[i], 4);
-                free(header_metainfo.fids);
-                
-                header_metainfo.fids = tmp_fids; 
-                header_metainfo.frame_count++;
-            }
+            // Construct new frame header
+            ID3V2_FRAME_HEADER frame_header;
+            char flags[2] = {'\0', '\0'};
+            strncpy(frame_header.fid, fids[i], 4);
+            int_to_header_ssint(1 + strlen(new_fid_data[i]), frame_header.size);
+            strncpy(frame_header.flags, flags, 2);
+
+            append_new_frame(frame_header, new_fid_data[i], f);
+            
+            // Update metainfo struct
+            char (*tmp_fids)[4] = malloc((header_metainfo.frame_count+1) * sizeof(char *));
+            for (int j = 0; j < header_metainfo.frame_count; j++) 
+                strncpy(tmp_fids[j], header_metainfo.fids[j], 4);
+            strncpy(tmp_fids[header_metainfo.frame_count], fids[i], 4);
+            free(header_metainfo.fids);
+            
+            header_metainfo.fids = tmp_fids; 
+            header_metainfo.frame_count++;
         }
         
         // Print all ID3 tags
         printf("Reading %s metadata :\n\n", path[id]);
-        print_data(f, header_metainfo);
-
+        print_data(f, header_metainfo); 
+         
+        free_id3_data(&header_metainfo);
         fclose(f);
     }
 

@@ -265,68 +265,44 @@ void print_data(FILE *f, ID3_METAINFO metainfo) {
 
 
 
-void extend_header(char fids[E_FIDS][5], 
-                   int frames_edited[E_FIDS], 
-                   ID3_METAINFO header_metainfo, 
-                   ID3V2_HEADER header,
-                   char new_fid_data[E_FIDS][256], 
+void extend_header(int additional_mtdt_sz, 
+                   ID3_METAINFO header_metainfo,
                    FILE *f,
                    char *old_filename) {            
-    int allocated_mtdt_sz = synchsafeint32ToInt(header.size);
-    int additional_mtdt_sz = 0;
+    int additional_sz = additional_mtdt_sz + 2000;
+    int new_sz = header_metainfo.metadata_sz + additional_sz;
+    
+    FILE *f2 = fopen("tmp.mp3", "r+b"); // TODO: Change tmp file naming
+    
+    int buf_sz = header_metainfo.metadata_sz + sizeof(ID3V2_HEADER);
+    char *buf = malloc(buf_sz);
 
-    // Calculate difference in size of new metadata info and current info
-    for (int i = 0; i < E_FIDS; i++) {
-        char *fid = fids[i];
+    char *empty_buf = malloc(additional_sz);
+    
+    fseek(f, 0, SEEK_SET);
+    fread(buf, buf_sz, 1, f);
 
-        if (!frames_edited[i]) {
-            int exists = 0;
+    fseek(f2, 0, SEEK_SET);
+    fwrite(buf, buf_sz, 1, f2);
+    fwrite(empty_buf, additional_sz, 1, f2);
 
-            int j;
-            for (j = 0; j < header_metainfo.frame_count; j++) {
-                if (strncmp(header_metainfo.fids[j], fid, 4) == 0) {
-                    exists = 1;
-                    break;
-                }
-            }
+    fseek(f, 0, SEEK_END);
+    int mp3_buf_sz = ftell(f) - buf_sz;
+    char *mp3_buf = malloc(mp3_buf_sz); 
+    fseek(f, buf_sz, SEEK_SET);
+    fread(mp3_buf, mp3_buf_sz, 1, f);
 
-            if (exists) additional_mtdt_sz += strlen(new_fid_data[i]) - header_metainfo.fid_sz[j] + 1; 
-            else additional_mtdt_sz += sizeof(ID3V2_FRAME_HEADER) + strlen(new_fid_data[i]) + 1;
-        }
-    }
+    fwrite(mp3_buf, mp3_buf_sz, 1, f2);
 
-    printf("Additional metadata size: %d\n", additional_mtdt_sz);
+    fclose(f);
+    rename("tmp.mp3", old_filename);
+    f = f2;
 
-    if (header_metainfo.metadata_sz + additional_mtdt_sz >= allocated_mtdt_sz) {
-        int additional_sz = additional_mtdt_sz + 2000;
-        int new_sz = header_metainfo.metadata_sz + additional_sz;
-        
-        FILE *f2 = fopen("tmp.mp3", "r+b");
-        
-        int buf_sz = header_metainfo.metadata_sz + sizeof(ID3V2_HEADER);
-        char *buf = malloc(buf_sz);
+    fseek(f, 6, SEEK_SET);
 
-        char *empty_buf = malloc(additional_sz);
-        
-        fseek(f, 0, SEEK_SET);
-        fread(buf, buf_sz, 1, f);
+    char ssint[4];
+    intToSynchsafeint32(new_sz, ssint);
+    fwrite(ssint, 4, 1, f);
 
-        fseek(f2, 0, SEEK_SET);
-        fwrite(buf, buf_sz, 1, f2);
-        fwrite(empty_buf, additional_sz, 1, f2);
-
-        fseek(f, 0, SEEK_END);
-        int mp3_buf_sz = ftell(f) - buf_sz;
-        char *mp3_buf = malloc(mp3_buf_sz); 
-        fseek(f, buf_sz, SEEK_SET);
-        fread(mp3_buf, mp3_buf_sz, 1, f);
-
-        fwrite(mp3_buf, mp3_buf_sz, 1, f2);
-
-        fclose(f);
-        rename("tmp.mp3", old_filename);
-        f = f2;
-    } else {
-        return;
-    }
+    fseek(f, header_metainfo.frame_pos, SEEK_SET);
 }

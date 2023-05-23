@@ -245,6 +245,38 @@ void print_args(int path_size, char **path, char new_fid_data[E_FIDS][256], int 
 
 
 
+int get_additional_mtdt_sz(int frames_edited[E_FIDS], 
+                           ID3_METAINFO header_metainfo,
+                           char new_fid_data[E_FIDS][256]) {
+    int additional_mtdt_sz = 0;
+
+    // Calculate difference in size of new metadata info and current info
+    for (int i = 0; i < E_FIDS; i++) {
+        char *fid = fids[i];
+
+        if (!frames_edited[i]) {
+            int exists = 0;
+
+            int j;
+            for (j = 0; j < header_metainfo.frame_count; j++) {
+                if (strncmp(header_metainfo.fids[j], fid, 4) == 0) {
+                    exists = 1;
+                    break;
+                }
+            }
+
+            if (exists) additional_mtdt_sz += strlen(new_fid_data[i]) - header_metainfo.fid_sz[j] + 1; 
+            else additional_mtdt_sz += sizeof(ID3V2_FRAME_HEADER) + strlen(new_fid_data[i]) + 1;
+        }
+    }
+
+    printf("Additional metadata size: %d\n", additional_mtdt_sz);
+
+    return additional_mtdt_sz;
+}
+
+
+
 /**
  * @brief Reverse lookup for frame ID to index
  * 
@@ -338,7 +370,13 @@ int main(int argc, char *argv[]) {
         }
 
         // Calculate new metadata size to predict if metadata header has to be extended
-        extend_header(fids, frames_edited, header_metainfo, header, new_fid_data, f, path[id]);
+        int additional_mtdt_sz = get_additional_mtdt_sz(frames_edited, header_metainfo, new_fid_data);
+        int allocated_mtdt_sz = synchsafeint32ToInt(header.size);
+
+        if (header_metainfo.metadata_sz + additional_mtdt_sz >= allocated_mtdt_sz) {
+            extend_header(additional_mtdt_sz, header_metainfo, f, path[id]);
+            get_ID3_metainfo(&header_metainfo, &header, f, 0);
+        }
 
         int bytes_read = 0;
 

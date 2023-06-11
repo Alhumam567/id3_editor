@@ -272,12 +272,12 @@ void extend_header(int additional_mtdt_sz,
     int additional_sz = additional_mtdt_sz + 2000;
     int new_sz = header_metainfo.metadata_sz + additional_sz;
     
-    FILE *f2 = fopen("tmp.mp3", "r+b"); // TODO: Change tmp file naming
+    FILE *f2 = fopen("tmp.mp3", "w+b"); // TODO: Change tmp file naming
     
     int buf_sz = header_metainfo.metadata_sz + sizeof(ID3V2_HEADER);
     char *buf = malloc(buf_sz);
 
-    char *empty_buf = malloc(additional_sz);
+    char *empty_buf = calloc(additional_sz, 1);
     
     fseek(f, 0, SEEK_SET);
     fread(buf, buf_sz, 1, f);
@@ -295,14 +295,28 @@ void extend_header(int additional_mtdt_sz,
     fwrite(mp3_buf, mp3_buf_sz, 1, f2);
 
     fclose(f);
-    rename("tmp.mp3", old_filename);
-    f = f2;
+    fflush(f2);
+    fclose(f2);
 
-    fseek(f, 6, SEEK_SET);
+    if (remove(old_filename) != 0) {
+        printf("Delete file failed.\n");
+        exit(1);
+    }
+    if (rename("tmp.mp3", old_filename) != 0) {
+        printf("Rename file failed.\n");
+        exit(1);
+    }
+    f2 = fopen(old_filename, "r+b");
+    if (f2 == NULL) {
+        printf("File does not exist.\n");
+        exit(1);
+    }
+    fseek(f2, 6, SEEK_SET);
 
     char ssint[4];
     intToSynchsafeint32(new_sz, ssint);
-    fwrite(ssint, 4, 1, f);
+    fwrite(ssint, 4, 1, f2);
 
-    fseek(f, header_metainfo.frame_pos, SEEK_SET);
+    fseek(f2, header_metainfo.frame_pos, SEEK_SET);
+    fclose(f2);
 }

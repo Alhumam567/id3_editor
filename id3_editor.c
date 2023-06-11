@@ -24,6 +24,7 @@
  * @param fid_len - Count of editable frame IDs  
  * @param path - Pointer to array of variable length strings that are paths of files to be edited
  * @param path_size - Int pointer containing count of files to be edited
+ * @param is_dir - Boolean for given path is directory
  * @param dir_len - Length of filepath directory-to prefix, 0 if arg passed is file.
  * @param num_titles - Pointer to int to save number of titles if provided in args
  */
@@ -34,6 +35,7 @@ void parse_args(int argc, char *argv[],
                 int fid_len,
                 char ***path, 
                 int *path_size,
+                int *is_dir,
                 int *dir_len,
                 int *num_titles) {
     
@@ -70,7 +72,7 @@ void parse_args(int argc, char *argv[],
             case 't': // TIT2: Title
                 if (strlen(optarg) > 256) errflag++;
                 else {
-                    char titles[256];
+                    char *titles = malloc(256); // MLEAK
                     strncpy(titles, optarg, strlen(optarg));   
 
                     char *tok = strtok(titles, ",");
@@ -139,7 +141,10 @@ void parse_args(int argc, char *argv[],
         
     // If filepath arg is a DIR, retrieve all child filepaths for editing
     if (S_ISDIR(statbuf.st_mode)) {
+        *is_dir = 1;
         *dir_len = strlen(filepath);
+        // check to see last character is directory delimiter
+        if (filepath[*dir_len - 1] != '/' || filepath[*dir_len - 1] != '\\') *dir_len += 1;
 
         DIR *dir = opendir(filepath);
         DIR *item_dir;
@@ -199,7 +204,8 @@ void parse_args(int argc, char *argv[],
                     exit(1);    
                 }
 
-                strncpy((*path)[j++], full_path, strlen(full_path));
+                //save entire path to file in <path>
+                strncpy((*path)[j++], full_path, strlen(full_path)); 
             }
 
             free(full_path); 
@@ -207,7 +213,21 @@ void parse_args(int argc, char *argv[],
 
         free(filepath_prefix);
     } else { // Filepath argument is a file
-        *dir_len = 0;
+        *is_dir = 0;
+
+        char filename[100];
+        memset(filename, 0, 100);
+        strncpy(filename, filepath, 100);
+        char *tok = strtok(filename, "/\\");
+        int last_tok_len = 0;
+        while (tok != NULL) {
+            *dir_len += strlen(tok);
+            last_tok_len = strlen(tok);
+            tok = strtok(NULL, "/\\");
+            if (tok != NULL) *dir_len += 1;
+        }
+        *dir_len -= last_tok_len;
+
         *path_size = 1;
 
         // Validate number of files with number of titles
@@ -226,7 +246,7 @@ void parse_args(int argc, char *argv[],
 
 
 
-void print_args(int path_size, char **path, char new_fid_data[E_FIDS][256], int dir_len) {
+void print_args(int path_size, char **path, char new_fid_data[E_FIDS][256], int dir_len, int is_dir) {
     // Print arguments
     printf("Configuration: \n");
     printf("\tEditing Files: %d\n", path_size);
@@ -237,7 +257,8 @@ void print_args(int path_size, char **path, char new_fid_data[E_FIDS][256], int 
     for (int i = 0; i < E_FIDS; i++) {
         printf("\t\t%s: %s\n", fids[i], new_fid_data[i]);
     }
-    if (dir_len > 0)
+    printf("\tDirectory length: %d\n", dir_len);
+    if (is_dir)
         printf("\tDir: true\n\n");
     else 
         printf("\tDir: false\n\n");
@@ -270,7 +291,7 @@ int get_additional_mtdt_sz(int frames_edited[E_FIDS],
         }
     }
 
-    printf("Additional metadata size: %d\n", additional_mtdt_sz);
+    // printf("Additional metadata size: %d\n", additional_mtdt_sz);
 
     return additional_mtdt_sz;
 }
@@ -326,7 +347,8 @@ int main(int argc, char *argv[]) {
     
     char **path; //Array of filepaths
     int path_size; //Number of files in <path>;
-    int dir_len; //Length of directory prefix in filepath
+    int is_dir = 0; //Boolean flag for given path is directory 
+    int dir_len = 0; //Length of directory prefix in filepath
 
     int frame_args[E_FIDS]; //Array of bool flags representing frames that need to be edited
     for (int i = 0; i < E_FIDS; i++) frame_args[i] = 1;
@@ -334,8 +356,8 @@ int main(int argc, char *argv[]) {
     memset(new_fid_data, 0, E_FIDS*256);
     int num_titles = 0;
 
-    parse_args(argc, argv, fids, frame_args, new_fid_data, E_FIDS, &path, &path_size, &dir_len, &num_titles);
-    print_args(path_size, path, new_fid_data, dir_len);
+    parse_args(argc, argv, fids, frame_args, new_fid_data, E_FIDS, &path, &path_size, &is_dir, &dir_len, &num_titles);
+    print_args(path_size, path, new_fid_data, dir_len, is_dir);
 
     // Open, edit, and print ID3 metadata for each file  
     for (int id = 0; id < path_size; id++) {
@@ -354,27 +376,40 @@ int main(int argc, char *argv[]) {
         int frames_edited[E_FIDS];
         memcpy(frames_edited, frame_args, sizeof(frames_edited));
 
+        printf("getting new trck name\n");
         // Updating track name data for next file
         int trck_ind = get_fid_index(fids, "TRCK");
         if (frames_edited[trck_ind] == 0) {
+            printf("should not be here\n");
             char trck[4] = {'\0'};
-            snprintf(trck, 4, "%d", get_trck(path[id], dir_len + 1));
+            int int_trck = get_trck(path[id], dir_len);
+            snprintf(trck, 4, "%d", int_trck);
+            printf("trck: %d\n", int_trck);
             strncpy(new_fid_data[trck_ind], trck, 4);
         } 
 
+        printf("getting next title\n");
         // Updating title data for next file
         int tit2_ind = get_fid_index(fids, "TIT2");
         if (id > 0 && frames_edited[tit2_ind] == 0 && num_titles > 1) { 
             char *tok = strtok(NULL, ",");
+            printf("%s\n", tok);
             strncpy(new_fid_data[tit2_ind], tok, strlen(tok));
         }
 
+        printf("calculating additional metadata\n");
         // Calculate new metadata size to predict if metadata header has to be extended
         int additional_mtdt_sz = get_additional_mtdt_sz(frames_edited, header_metainfo, new_fid_data);
         int allocated_mtdt_sz = synchsafeint32ToInt(header.size);
 
+        printf("allocated_mtdt_sz: %d\n", allocated_mtdt_sz);
         if (header_metainfo.metadata_sz + additional_mtdt_sz >= allocated_mtdt_sz) {
             extend_header(additional_mtdt_sz, header_metainfo, f, path[id]);
+            f = fopen(path[id], "r+b");
+            if (f == NULL) {
+                printf("File does not exist.\n");
+                exit(1);
+            }
             get_ID3_metainfo(&header_metainfo, &header, f, 0);
         }
 

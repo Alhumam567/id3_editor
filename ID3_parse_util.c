@@ -13,7 +13,7 @@
  */
 ID3V2_HEADER *read_header(ID3V2_HEADER *header, FILE *f, char *filename, int verbose) {
     if (fread(header->fid, 1, 3, f) != 3) {
-        printf("Error occurred reading file identifier.\n");
+        printf("read_header: Error occurred reading file identifier.\n");
         exit(1);
     }
 
@@ -43,7 +43,7 @@ ID3V2_HEADER *read_header(ID3V2_HEADER *header, FILE *f, char *filename, int ver
         printf("\t\tExtended Header: %d\n", header->flags >> 6);
         printf("\t\tExp. Indicator: %d\n", header->flags >> 5);
         printf("\t\tFooter present: %d\n", header->flags >> 4);
-        printf("\tTag Size: %d\n\n", metadata_size);
+        printf("\tTag Size: %d\n", metadata_size);
     }
 
     return header;
@@ -63,7 +63,7 @@ int parse_frame_header_flags(char flags[2], int *readonly, FILE *f);
  */
 ID3V2_FRAME_HEADER *read_frame_header(ID3V2_FRAME_HEADER *h, FILE *f) {
     if (fread(h->fid, 1, 4, f) != 4) {
-        printf("Error occurred reading file identifier.\n");
+        printf("read_frame_header: Error occurred reading file identifier.\n");
         exit(1);
     }
     if (fread(h->size, 1, 4, f) != 4) {
@@ -146,8 +146,7 @@ int parse_frame_header_flags(char flags[2], int *readonly, FILE *f) {
  * @return ID3_METAINFO* - returns pointer to metainfo struct <metainfo>
  */
 ID3_METAINFO *get_ID3_metainfo(ID3_METAINFO *metainfo, ID3V2_HEADER *header, FILE *f, int verbose) {
-    fseek(f, 10, SEEK_SET); // Set FILE * to end of header
-
+    int x = fseek(f, 10, SEEK_SET); // Set FILE * to end of header
     metainfo->frame_pos = parse_header_flags(header->flags, f); // Parse header flags and seek past extended header if necessary
 
     int sz = 0;
@@ -158,7 +157,7 @@ ID3_METAINFO *get_ID3_metainfo(ID3_METAINFO *metainfo, ID3V2_HEADER *header, FIL
     while (sz < metadata_alloc) {
         ID3V2_FRAME_HEADER frame_header;
         if (fread(frame_header.fid, 1, 4, f) != 4) {
-            printf("Error occurred reading file identifier.\n");
+            printf("get_ID3_metainfo (1): Error occurred reading file identifier [%d].\n", sz);
             exit(1);    
         }
 
@@ -193,7 +192,7 @@ ID3_METAINFO *get_ID3_metainfo(ID3_METAINFO *metainfo, ID3V2_HEADER *header, FIL
     // Save ID3 frame IDs and sizes
     for (int i = 0; i < frames; i++) {
         if (fread(metainfo->fids[i], 1, 4, f) != 4) {
-            printf("Error occurred reading file identifier.\n");
+            printf("get_ID3_metainfo (2): Error occurred reading file identifier.\n");
             exit(1);
         }
         char ss_sz[4];

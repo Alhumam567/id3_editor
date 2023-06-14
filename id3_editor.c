@@ -26,6 +26,7 @@
  * @param path_size - Int pointer containing count of files to be edited
  * @param is_dir - Boolean for given path is directory
  * @param dir_len - Length of filepath directory-to prefix, 0 if arg passed is file.
+ * @param titles - Used to save original str to tokenize when writing multiple distinct titles
  * @param num_titles - Pointer to int to save number of titles if provided in args
  */
 void parse_args(int argc, char *argv[], 
@@ -37,6 +38,7 @@ void parse_args(int argc, char *argv[],
                 int *path_size,
                 int *is_dir,
                 int *dir_len,
+                char **titles,
                 int *num_titles) {
     
     //File or Dir path is required at minimum
@@ -72,21 +74,22 @@ void parse_args(int argc, char *argv[],
             case 't': // TIT2: Title
                 if (strlen(optarg) > 256) errflag++;
                 else {
-                    char *titles = malloc(256); // MLEAK
-                    strncpy(titles, optarg, strlen(optarg));   
+                    (*titles) = malloc(256); 
+                    strncpy(*titles, optarg, strlen(optarg));   
 
-                    char *tok = strtok(titles, ",");
+                    char *tok = strtok(*titles, ",");
                     while (tok != NULL) {
                         (*num_titles)++;
                         tok = strtok(NULL, ",");
                     }
 
-                    strncpy(titles, optarg, strlen(optarg)); 
+                    strncpy(*titles, optarg, strlen(optarg)); 
                     if (*num_titles > 1) {
-                        tok = strtok(titles, ",");   
+                        tok = strtok(*titles, ",");   
                         strncpy(edit_fids_str[2], tok, strlen(tok));
                     } else {
                         strncpy(edit_fids_str[2], optarg, strlen(optarg));
+                        free(*titles);
                     }
 
                     frame_args[2] = 0;
@@ -332,12 +335,14 @@ void free_id3_data(ID3_METAINFO *metainfo) {
  * @param path - Pointer to filepath strings
  * @param path_size - Filepaths count
  */
-void free_arg_data(char **path, int path_size) {
+void free_arg_data(char **path, int path_size, char *titles, int num_titles) {
     for (int i = 0; i < path_size; i++) {
         free(path[i]);
     }
 
     free(path);
+
+    if (num_titles > 1) free(titles);
 }
 
 
@@ -354,9 +359,10 @@ int main(int argc, char *argv[]) {
     for (int i = 0; i < E_FIDS; i++) frame_args[i] = 1;
     char new_fid_data[E_FIDS][256]; //New frame data
     memset(new_fid_data, 0, E_FIDS*256);
+    char *titles = NULL;
     int num_titles = 0;
 
-    parse_args(argc, argv, fids, frame_args, new_fid_data, E_FIDS, &path, &path_size, &is_dir, &dir_len, &num_titles);
+    parse_args(argc, argv, fids, frame_args, new_fid_data, E_FIDS, &path, &path_size, &is_dir, &dir_len, &titles, &num_titles);
     print_args(path_size, path, new_fid_data, dir_len, is_dir);
 
     // Open, edit, and print ID3 metadata for each file  
@@ -471,7 +477,7 @@ int main(int argc, char *argv[]) {
         fclose(f);
     }
 
-    free_arg_data(path, path_size);
+    free_arg_data(path, path_size, titles, num_titles);
 
     return 0;
 }

@@ -107,6 +107,8 @@ void rewrite_buffer(signed int offset, int remaining_metadata_size, int zero_buf
     fwrite(buf, 1, buf_size, f);
 
     fseek(f,-1*buf_size,SEEK_CUR);
+
+    free(buf);
 }
 
 
@@ -319,4 +321,7 @@ void extend_header(int additional_mtdt_sz,
 
     fseek(f2, header_metainfo.frame_pos, SEEK_SET);
     fclose(f2);
+
+    free(buf);
+    free(mp3_buf);
 }

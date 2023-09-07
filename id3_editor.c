@@ -275,6 +275,28 @@ void print_args(int path_size, char **path, char new_fid_data[E_FIDS][256], int 
 
 
 
+void update_fid_data(char new_fid_data[E_FIDS][256], char fids[E_FIDS][5], char **path, int id, int dir_len, int num_titles, int frames_edited[E_FIDS]) {
+    // Updating track name data for next file
+    int trck_ind = get_fid_index(fids, "TRCK");
+    if (frames_edited[trck_ind] == 0) {
+        printf("Updating track index.\n");
+        char trck[4] = {'\0'};
+        int int_trck = get_trck(path[id], dir_len);
+        snprintf(trck, 4, "%d", int_trck);
+        strncpy(new_fid_data[trck_ind], trck, 4);
+    } 
+    
+    // Updating title data for next file
+    int tit2_ind = get_fid_index(fids, "TIT2");
+    if (id > 0 && frames_edited[tit2_ind] == 0 && num_titles > 1) { 
+        printf("Updating track title.\n");
+        char *tok = strtok(NULL, ",");  
+        strncpy(new_fid_data[tit2_ind], tok, strlen(tok));
+    }
+}
+
+
+
 int get_additional_mtdt_sz(int frames_edited[E_FIDS], 
                            ID3_METAINFO header_metainfo,
                            char new_fid_data[E_FIDS][256]) {
@@ -390,27 +412,9 @@ int main(int argc, char *argv[]) {
         int frames_edited[E_FIDS];
         memcpy(frames_edited, frame_args, sizeof(frames_edited));
 
-        
-        // Updating track name data for next file
-        int trck_ind = get_fid_index(fids, "TRCK");
-        if (frames_edited[trck_ind] == 0) {
-            printf("getting new trck name\n");
-            char trck[4] = {'\0'};
-            int int_trck = get_trck(path[id], dir_len);
-            snprintf(trck, 4, "%d", int_trck);
-            strncpy(new_fid_data[trck_ind], trck, 4);
-        } 
+        update_fid_data(new_fid_data, fids, path, id, dir_len, num_titles, frames_edited);
 
-        
-        // Updating title data for next file
-        int tit2_ind = get_fid_index(fids, "TIT2");
-        if (id > 0 && frames_edited[tit2_ind] == 0 && num_titles > 1) { 
-            printf("getting next title\n");
-            char *tok = strtok(NULL, ",");  
-            strncpy(new_fid_data[tit2_ind], tok, strlen(tok));
-        }
-
-        printf("calculating additional metadata\n");
+        printf("Calculating additional metadata.\n");
         // Calculate new metadata size to predict if metadata header has to be extended
         int additional_mtdt_sz = get_additional_mtdt_sz(frames_edited, header_metainfo, new_fid_data);
         int allocated_mtdt_sz = synchsafeint32ToInt(header.size);
@@ -426,9 +430,9 @@ int main(int argc, char *argv[]) {
             get_ID3_metainfo(&header_metainfo, &header, f, 0);
         }
 
-        int bytes_read = 0;
-
         printf("Editing file...\n\n");
+
+        int bytes_read = 0;
 
         // Search and edit existing frames
         for(int i = 0; i < header_metainfo.frame_count; i++) {

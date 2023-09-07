@@ -51,7 +51,7 @@ void parse_args(int argc, char *argv[],
     extern char *optarg;
     extern int optind, optopt;
 
-    while((opt = getopt(argc, argv, "+a:b:t:nh")) != -1) {
+    while((opt = getopt(argc, argv, "+a:b:t:p:nh")) != -1) {
         switch(opt) {
             case 'a': // TPE1: Artist name 
                 if (strlen(optarg) > 256) errflag++;
@@ -102,6 +102,12 @@ void parse_args(int argc, char *argv[],
                 
                 frame_args[3] = 0;
                 break;
+            case 'p':
+                strncpy(edit_fids_str[4], optarg, strlen(optarg));
+                printf("Option detected: %s\n", edit_fids[4]);
+
+                frame_args[4] = 0;
+                break;
             case 'h':
                 printf("Usage: ./mp3.exe [OPTION]... PATH\n");
                 printf("Reads and edits ID3 metadata tags.\n");
@@ -147,7 +153,7 @@ void parse_args(int argc, char *argv[],
         *is_dir = 1;
         *dir_len = strlen(filepath);
         // check to see last character is directory delimiter
-        if (filepath[*dir_len - 1] != '/' || filepath[*dir_len - 1] != '\\') *dir_len += 1;
+        if (!(filepath[*dir_len - 1] != '/' || filepath[*dir_len - 1] != '\\')) *dir_len += 1;
 
         DIR *dir = opendir(filepath);
         DIR *item_dir;
@@ -357,8 +363,10 @@ int main(int argc, char *argv[]) {
 
     int frame_args[E_FIDS]; //Array of bool flags representing frames that need to be edited
     for (int i = 0; i < E_FIDS; i++) frame_args[i] = 1;
+
     char new_fid_data[E_FIDS][256]; //New frame data
     memset(new_fid_data, 0, E_FIDS*256);
+
     char *titles = NULL;
     int num_titles = 0;
 
@@ -382,24 +390,23 @@ int main(int argc, char *argv[]) {
         int frames_edited[E_FIDS];
         memcpy(frames_edited, frame_args, sizeof(frames_edited));
 
-        printf("getting new trck name\n");
+        
         // Updating track name data for next file
         int trck_ind = get_fid_index(fids, "TRCK");
         if (frames_edited[trck_ind] == 0) {
-            printf("should not be here\n");
+            printf("getting new trck name\n");
             char trck[4] = {'\0'};
             int int_trck = get_trck(path[id], dir_len);
             snprintf(trck, 4, "%d", int_trck);
-            printf("trck: %d\n", int_trck);
             strncpy(new_fid_data[trck_ind], trck, 4);
         } 
 
-        printf("getting next title\n");
+        
         // Updating title data for next file
         int tit2_ind = get_fid_index(fids, "TIT2");
         if (id > 0 && frames_edited[tit2_ind] == 0 && num_titles > 1) { 
-            char *tok = strtok(NULL, ",");
-            printf("%s\n", tok);
+            printf("getting next title\n");
+            char *tok = strtok(NULL, ",");  
             strncpy(new_fid_data[tit2_ind], tok, strlen(tok));
         }
 

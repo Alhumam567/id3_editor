@@ -153,7 +153,7 @@ void parse_args(int argc, char *argv[],
         *is_dir = 1;
         *dir_len = strlen(filepath);
         // check to see last character is directory delimiter
-        if (!(filepath[*dir_len - 1] != '/' || filepath[*dir_len - 1] != '\\')) *dir_len += 1;
+        if (!(filepath[*dir_len - 1] == '/' || filepath[*dir_len - 1] == '\\')) *dir_len += 1;
 
         DIR *dir = opendir(filepath);
         DIR *item_dir;

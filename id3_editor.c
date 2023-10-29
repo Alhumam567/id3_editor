@@ -102,10 +102,16 @@ void parse_args(int argc, char *argv[],
                 
                 frame_args[3] = 0;
                 break;
-            case 'p':
+            case 'p': // APIC: Attached Picture
                 strncpy(edit_fids_str[4], optarg, strlen(optarg));
                 printf("Option detected: %s\n", edit_fids[4]);
 
+                if (isJPEG(edit_fids_str[4])) {
+                    printf("Is JPEG.\n");
+                } else {
+                    printf("Is not JPEG.\n");
+                }
+                
                 frame_args[4] = 0;
                 break;
             case 'h':
@@ -116,6 +122,7 @@ void parse_args(int argc, char *argv[],
                 printf("\t%-14s\tWrite new album name ALBUM for all files in path\n", "-b ALBUM, ");
                 printf("\t%-14s\tWrite new title(s) for all files in path. If PATH\n\t%-11s\tcontains more than one file, TITLE can contain an\n\t%-11s\tequivalent number of titles, separated by commas.\n", "-t TITLE, ", " ");
                 printf("\t%-14s\tWrite track number for all files in path. If this\n\t%-11s\toption is selected, the track number for the file\n\t%-11s\tmust be contained in beginning of the filename.\n", "-n, ", " ");
+                printf("\t%-14s\tAttach image to all files in path.\n", "-p IMAGE_PATH, ");
                 
                 exit(0);
                 break;
@@ -275,6 +282,23 @@ void print_args(int path_size, char **path, char new_fid_data[E_FIDS][256], int 
 
 
 
+/**
+ * @brief Reverse lookup for frame ID to index
+ * 
+ * @param fids - Array of frame IDs
+ * @param fids_len - Count of frame IDs
+ * @param fid - Frame ID string
+ * @return int - Index of given frame ID
+ */
+int get_fid_index(char fids[E_FIDS][5], char fid[4]) {
+    for (int i = 0; i < E_FIDS; i++) {
+        if (strncmp(fids[i], fid, 4) == 0) return i;
+    }
+
+    return -1;
+}
+
+
 void update_fid_data(char new_fid_data[E_FIDS][256], char fids[E_FIDS][5], char **path, int id, int dir_len, int num_titles, int frames_edited[E_FIDS]) {
     // Updating track name data for next file
     int trck_ind = get_fid_index(fids, "TRCK");
@@ -327,23 +351,6 @@ int get_additional_mtdt_sz(int frames_edited[E_FIDS],
     return additional_mtdt_sz;
 }
 
-
-
-/**
- * @brief Reverse lookup for frame ID to index
- * 
- * @param fids - Array of frame IDs
- * @param fids_len - Count of frame IDs
- * @param fid - Frame ID string
- * @return int - Index of given frame ID
- */
-int get_fid_index(char fids[E_FIDS][5], char fid[4]) {
-    for (int i = 0; i < E_FIDS; i++) {
-        if (strncmp(fids[i], fid, 4) == 0) return i;
-    }
-
-    return -1;
-}
 
 
 /**

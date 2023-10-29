@@ -325,3 +325,32 @@ void extend_header(int additional_mtdt_sz,
     free(buf);
     free(mp3_buf);
 }
+
+
+int isJPEG(char *filepath) {
+    FILE *img = fopen(filepath, "rb");
+    unsigned char buf[4];
+    unsigned char jfifHeader[] = {0xFF, 0xD8, 0xFF, 0xE0};
+    int bytes_read = fread(buf, 4, 1, img);
+
+    // SOI
+    if (bytes_read != 1 || strncmp(buf, jfifHeader, 4) != 0) {
+        fclose(img);
+        printf("\n 1 Error: image specified is not JPEG.\n");
+        return 0;
+    }
+
+    unsigned char idBuf[5];
+    unsigned char jfifId[] = {0x4A, 0x46, 0x49, 0x46, 0x0};
+    fseek(img, 2, SEEK_CUR);
+    bytes_read = fread(idBuf, 5, 1, img);
+
+    // ID
+    if (bytes_read != 1 || strncmp(idBuf, jfifId, 5) != 0) {
+        fclose(img);
+        printf("\n 3 Error: image specified is not JPEG.\n");
+        return 0;
+    }
+
+    return 1;
+}

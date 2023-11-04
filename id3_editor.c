@@ -106,10 +106,9 @@ void parse_args(int argc, char *argv[],
                 strncpy(edit_fids_str[4], optarg, strlen(optarg));
                 printf("Option detected: %s\n", edit_fids[4]);
 
-                if (isJPEG(edit_fids_str[4])) {
-                    printf("Is JPEG.\n");
-                } else {
-                    printf("Is not JPEG.\n");
+                if (!isJPEG(edit_fids_str[4])) {
+                    printf("Image specified is not a JPEG.\n");
+                    exit(1);
                 }
                 
                 frame_args[4] = 0;
@@ -122,7 +121,7 @@ void parse_args(int argc, char *argv[],
                 printf("\t%-14s\tWrite new album name ALBUM for all files in path\n", "-b ALBUM, ");
                 printf("\t%-14s\tWrite new title(s) for all files in path. If PATH\n\t%-11s\tcontains more than one file, TITLE can contain an\n\t%-11s\tequivalent number of titles, separated by commas.\n", "-t TITLE, ", " ");
                 printf("\t%-14s\tWrite track number for all files in path. If this\n\t%-11s\toption is selected, the track number for the file\n\t%-11s\tmust be contained in beginning of the filename.\n", "-n, ", " ");
-                printf("\t%-14s\tAttach image to all files in path.\n", "-p IMAGE_PATH, ");
+                printf("\t%-14s\tAttach image to all files in path, must be JPEG.\n", "-p IMAGE_PATH, ");
                 
                 exit(0);
                 break;
@@ -299,7 +298,7 @@ int get_fid_index(char fids[E_FIDS][5], char fid[4]) {
 }
 
 
-void update_fid_data(char new_fid_data[E_FIDS][256], char fids[E_FIDS][5], char **path, int id, int dir_len, int num_titles, int frames_edited[E_FIDS]) {
+void update_frame_data(char new_fid_data[E_FIDS][256], char fids[E_FIDS][5], char **path, int id, int dir_len, int num_titles, int frames_edited[E_FIDS]) {
     // Updating track name data for next file
     int trck_ind = get_fid_index(fids, "TRCK");
     if (frames_edited[trck_ind] == 0) {
@@ -411,29 +410,22 @@ int main(int argc, char *argv[]) {
         }
 
         ID3V2_HEADER header;
-        read_header(&header, f, path[id], 1);
-
         ID3_METAINFO header_metainfo;
+        read_header(&header, f, path[id], 1);
         get_ID3_metainfo(&header_metainfo, &header, f, 1);
         
         int frames_edited[E_FIDS];
         memcpy(frames_edited, frame_args, sizeof(frames_edited));
 
-        update_fid_data(new_fid_data, fids, path, id, dir_len, num_titles, frames_edited);
+        update_frame_data(new_fid_data, fids, path, id, dir_len, num_titles, frames_edited);
 
         printf("Calculating additional metadata.\n");
+        
         // Calculate new metadata size to predict if metadata header has to be extended
         int additional_mtdt_sz = get_additional_mtdt_sz(frames_edited, header_metainfo, new_fid_data);
         int allocated_mtdt_sz = synchsafeint32ToInt(header.size);
-
-        printf("allocated_mtdt_sz: %d\n", allocated_mtdt_sz);
         if (header_metainfo.metadata_sz + additional_mtdt_sz >= allocated_mtdt_sz) {
-            extend_header(additional_mtdt_sz, header_metainfo, f, path[id]);
-            f = fopen(path[id], "r+b");
-            if (f == NULL) {
-                printf("File does not exist.\n");
-                exit(1);
-            }
+            f = extend_header(additional_mtdt_sz, header_metainfo, f, path[id]);
             get_ID3_metainfo(&header_metainfo, &header, f, 0);
         }
 

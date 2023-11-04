@@ -267,10 +267,10 @@ void print_data(FILE *f, ID3_METAINFO metainfo) {
 
 
 
-void extend_header(int additional_mtdt_sz, 
+FILE* extend_header(int additional_mtdt_sz, 
                    ID3_METAINFO header_metainfo,
                    FILE *f,
-                   char *old_filename) {            
+                   char *old_filename) { 
     int additional_sz = additional_mtdt_sz + 2000;
     int new_sz = header_metainfo.metadata_sz + additional_sz;
     
@@ -320,10 +320,11 @@ void extend_header(int additional_mtdt_sz,
     fwrite(ssint, 4, 1, f2);
 
     fseek(f2, header_metainfo.frame_pos, SEEK_SET);
-    fclose(f2);
 
     free(buf);
     free(mp3_buf);
+
+    return f2;
 }
 
 
@@ -331,10 +332,10 @@ int isJPEG(char *filepath) {
     FILE *img = fopen(filepath, "rb");
     unsigned char buf[4];
     unsigned char jfifHeader[] = {0xFF, 0xD8, 0xFF, 0xE0};
-    int bytes_read = fread(buf, 4, 1, img);
+    int read = fread(buf, 4, 1, img);
 
     // SOI
-    if (bytes_read != 1 || strncmp(buf, jfifHeader, 4) != 0) {
+    if (read != 1 || strncmp(buf, jfifHeader, 4) != 0) {
         fclose(img);
         printf("\n 1 Error: image specified is not JPEG.\n");
         return 0;
@@ -343,10 +344,10 @@ int isJPEG(char *filepath) {
     unsigned char idBuf[5];
     unsigned char jfifId[] = {0x4A, 0x46, 0x49, 0x46, 0x0};
     fseek(img, 2, SEEK_CUR);
-    bytes_read = fread(idBuf, 5, 1, img);
+    read = fread(idBuf, 5, 1, img);
 
     // ID
-    if (bytes_read != 1 || strncmp(idBuf, jfifId, 5) != 0) {
+    if (read != 1 || strncmp(idBuf, jfifId, 5) != 0) {
         fclose(img);
         printf("\n 3 Error: image specified is not JPEG.\n");
         return 0;

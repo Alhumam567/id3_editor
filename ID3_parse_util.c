@@ -187,7 +187,7 @@ ID3_METAINFO *get_ID3_metainfo(ID3_METAINFO *metainfo, ID3V2_HEADER *header, FIL
     metainfo->metadata_sz = sz;
     metainfo->frame_count = frames;
     metainfo->fids = calloc(frames, sizeof(char *));
-    metainfo->fid_sz = calloc(frames, sizeof(int));
+    metainfo->frame_sz = calloc(frames, sizeof(int));
 
     // Save ID3 frame IDs and sizes
     for (int i = 0; i < frames; i++) {
@@ -202,7 +202,7 @@ ID3_METAINFO *get_ID3_metainfo(ID3_METAINFO *metainfo, ID3V2_HEADER *header, FIL
         }
 
         int frame_data_sz = synchsafeint32ToInt(ss_sz);
-        metainfo->fid_sz[i] = frame_data_sz;
+        metainfo->frame_sz[i] = frame_data_sz;
 
         fseek(f, 2 + frame_data_sz, SEEK_CUR);
     }
@@ -211,7 +211,7 @@ ID3_METAINFO *get_ID3_metainfo(ID3_METAINFO *metainfo, ID3V2_HEADER *header, FIL
         printf("Metadata Size: %d\n", metainfo->metadata_sz);
         printf("Frame Count: %d\n", metainfo->frame_count);
         printf("Frames: ");
-        for (int i = 0; i < metainfo->frame_count; i++) printf("%.4s(%d);", metainfo->fids[i], metainfo->fid_sz[i]);
+        for (int i = 0; i < metainfo->frame_count; i++) printf("%.4s(%d);", metainfo->fids[i], metainfo->frame_sz[i]);
         printf("\n\n");
     }
 
@@ -219,3 +219,28 @@ ID3_METAINFO *get_ID3_metainfo(ID3_METAINFO *metainfo, ID3V2_HEADER *header, FIL
     
     return metainfo;
 }
+
+
+
+int sizeof_frame_data(char fid[5], char arg_data[256]) {
+    int sz = 0;
+    int id;
+
+    // Text information frame
+    if ((id = get_index(t_fids, T_FIDS, fid)) != -1) {
+        sz += sizeof(TEXT_FRAME) + strlen(arg_data);
+    } else if ((id = get_index(s_fids, S_FIDS, fid)) != -1) {
+        switch(id) {
+            case 0:
+                FILE *f = fopen(arg_data, "rb");
+                fseek(f, 0, SEEK_END);
+
+                sz += 1 + strlen("image/jpeg") + 1 + 1 + 1 + ftell(f);
+                fclose(f);
+                break;
+        } 
+    }
+
+    return sz;
+}
+

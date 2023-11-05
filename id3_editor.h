@@ -39,19 +39,19 @@ typedef struct ID3_METAINFO {
     int metadata_sz; // Size in bytes of used metadata
     int frame_count;
     char (*fids)[4];
-    int *fid_sz;
+    int *frame_sz;
     int frame_pos;
 } ID3_METAINFO;
 
-typedef struct ID3V2_TEXT_FRAME {
+typedef struct TEXT_FRAME {
     char encoding; 
-} ID3V2_TEXT_FRAME;
+} TEXT_FRAME;
 
-typedef struct ID3V2_APIC_DATA {
+typedef struct APIC_FRAME {
     char encoding;
     char *mime_type;
     char pic_type;
     char *description;
-} ID3V2_APIC_DATA;
+} APIC_FRAME;
 
 #endif

@@ -22,4 +22,21 @@ int get_trck(char *filepath, int prefix_len) {
     return atoi(filepath + prefix_len);
 }
 
+/**
+ * @brief Reverse lookup of frame ID strs to index
+ * 
+ * @param fids - String array of FID
+ * @param fids_len - Size of string array
+ * @param fid - String to find
+ * @return int - Index of string
+ */
+int get_index(char (*str)[5], int arr_len, char fid[4]) {
+    for (int i = 0; i < arr_len; i++) {
+        if (strncmp(str[i], fid, 4) == 0) return i;
+    }
+
+    return -1;
+}
+
+
 #endif

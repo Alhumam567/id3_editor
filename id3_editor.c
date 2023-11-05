@@ -281,26 +281,9 @@ void print_args(int path_size, char **path, char new_fid_data[E_FIDS][256], int 
 
 
 
-/**
- * @brief Reverse lookup for frame ID to index
- * 
- * @param fids - Array of frame IDs
- * @param fids_len - Count of frame IDs
- * @param fid - Frame ID string
- * @return int - Index of given frame ID
- */
-int get_fid_index(char fids[E_FIDS][5], char fid[4]) {
-    for (int i = 0; i < E_FIDS; i++) {
-        if (strncmp(fids[i], fid, 4) == 0) return i;
-    }
-
-    return -1;
-}
-
-
 void update_frame_data(char new_fid_data[E_FIDS][256], char fids[E_FIDS][5], char **path, int id, int dir_len, int num_titles, int frames_edited[E_FIDS]) {
     // Updating track name data for next file
-    int trck_ind = get_fid_index(fids, "TRCK");
+    int trck_ind = get_index(fids, E_FIDS, "TRCK");
     if (frames_edited[trck_ind] == 0) {
         printf("Updating track index.\n");
         char trck[4] = {'\0'};
@@ -310,7 +293,7 @@ void update_frame_data(char new_fid_data[E_FIDS][256], char fids[E_FIDS][5], cha
     } 
     
     // Updating title data for next file
-    int tit2_ind = get_fid_index(fids, "TIT2");
+    int tit2_ind = get_index(fids, E_FIDS, "TIT2");
     if (id > 0 && frames_edited[tit2_ind] == 0 && num_titles > 1) { 
         printf("Updating track title.\n");
         char *tok = strtok(NULL, ",");  
@@ -320,32 +303,30 @@ void update_frame_data(char new_fid_data[E_FIDS][256], char fids[E_FIDS][5], cha
 
 
 
-int get_additional_mtdt_sz(int frames_edited[E_FIDS], 
+int get_additional_mtdt_sz(const int frames_edit[E_FIDS], 
                            ID3_METAINFO header_metainfo,
                            char new_fid_data[E_FIDS][256]) {
     int additional_mtdt_sz = 0;
+    int frames_edit_cp[E_FIDS];
+    memcpy(frames_edit_cp, frames_edit, sizeof(int)*E_FIDS);
 
-    // Calculate difference in size of new metadata info and current info
-    for (int i = 0; i < E_FIDS; i++) {
-        char *fid = fids[i];
+    // Calculate difference in size of new metadata info and current info for existing frames
+    for (int i = 0; i < header_metainfo.frame_count; i++) {
+        int id = get_index(fids, E_FIDS, header_metainfo.fids[i]);
 
-        if (!frames_edited[i]) {
-            int exists = 0;
-
-            int j;
-            for (j = 0; j < header_metainfo.frame_count; j++) {
-                if (strncmp(header_metainfo.fids[j], fid, 4) == 0) {
-                    exists = 1;
-                    break;
-                }
-            }
-
-            if (exists) additional_mtdt_sz += strlen(new_fid_data[i]) - header_metainfo.fid_sz[j] + 1; 
-            else additional_mtdt_sz += sizeof(ID3V2_FRAME_HEADER) + strlen(new_fid_data[i]) + 1;
+        if (id != -1 && !frames_edit_cp[id]) { 
+            additional_mtdt_sz += sizeof_frame_data(header_metainfo.fids[i], new_fid_data[id]) - header_metainfo.frame_sz[i]; 
+            frames_edit_cp[id] = 1;
         }
     }
 
-    // printf("Additional metadata size: %d\n", additional_mtdt_sz);
+    // Add size of any remaining new frames that will be added
+    for (int i = 0; i < E_FIDS; i++) {
+        if (!frames_edit_cp[i]) {
+            additional_mtdt_sz += sizeof(ID3V2_FRAME_HEADER) + sizeof_frame_data(fids[i], new_fid_data[i]);
+            frames_edit_cp[i] = 1;
+        }
+    }
 
     return additional_mtdt_sz;
 }
@@ -359,7 +340,7 @@ int get_additional_mtdt_sz(int frames_edited[E_FIDS],
  */
 void free_id3_data(ID3_METAINFO *metainfo) {
     free(metainfo->fids);
-    free(metainfo->fid_sz);
+    free(metainfo->frame_sz);
 }
 
 
@@ -383,6 +364,8 @@ void free_arg_data(char **path, int path_size, char *titles, int num_titles) {
 
 int main(int argc, char *argv[]) {
     extern char fids[E_FIDS][5]; //Array of supported frame IDs for editing
+    extern char t_fids[T_FIDS][5];
+    extern char s_fids[S_FIDS][5];
     
     char **path; //Array of filepaths
     int path_size; //Number of files in <path>;
@@ -438,7 +421,7 @@ int main(int argc, char *argv[]) {
             ID3V2_FRAME_HEADER frame_header;
             read_frame_header(&frame_header, f);
 
-            int fid_index = get_fid_index(fids, frame_header.fid);
+            int fid_index = get_index(fids, E_FIDS, frame_header.fid);
             int len_data = get_frame_data_len(frame_header);
 
             int readonly = 0;

@@ -131,23 +131,17 @@ int overwrite_frame_data(char *new_data, int old_data_sz, int remaining_metadata
 
     int new_len = strlen(new_data) + 1; // Includes null byte in total length
 
-    if (new_len > old_data_sz) {
+    // Shift remaining metadata if the new frame is different sized than the current
+    if (new_len != old_data_sz) {
         fseek(f, old_data_sz, SEEK_CUR);
 
-        rewrite_buffer(new_len - old_data_sz, remaining_metadata_sz, 0, f);
-
+        int zero_buf = (new_len > old_data_sz) ? 0 : 1;
+        rewrite_buffer(new_len - old_data_sz, remaining_metadata_sz, zero_buf, f);
+        
         fseek(f, -1 * new_len, SEEK_CUR);
-        write_frame_data(new_data, f);
-    } else if (new_len == old_data_sz) {
-        write_frame_data(new_data, f);
-    } else {
-        fseek(f, old_data_sz, SEEK_CUR);
+    } 
 
-        rewrite_buffer(new_len - old_data_sz, remaining_metadata_sz, 1, f);
-
-        fseek(f, -1 * new_len, SEEK_CUR);
-        write_frame_data(new_data, f);
-    }
+    write_frame_data(new_data, f);
 
     fseek(f,-1 * new_len,SEEK_CUR);
     fflush(f);
@@ -187,14 +181,13 @@ int read_frame_data(FILE *f, int len_data) {
 
 
 
-void edit_frame_data(char *data, int *prev_len_data, int remaining_metadata_sz, int additional_bytes, FILE *f) {
+void edit_frame_data(char *new_data, int new_data_len, int prev_data_len, int remaining_metadata_sz, int additional_bytes, FILE *f) {
+    // Return file pointer to beginning of new length and write new length
     fseek(f, -1 * (6 + additional_bytes), SEEK_CUR); 
-    int new_len_data = write_new_len(strlen(data), f, 0);
+    int new_len_data = write_new_len(new_data_len, f, 0);
     fseek(f, 2 + additional_bytes, SEEK_CUR); 
 
-    overwrite_frame_data(data, *prev_len_data, remaining_metadata_sz, f);
-
-    *prev_len_data = new_len_data;
+    overwrite_frame_data(new_data, prev_data_len, remaining_metadata_sz, f);
 }
 
 

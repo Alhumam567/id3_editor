@@ -25,7 +25,7 @@ int get_trck(char *filepath, int prefix_len) {
 /**
  * @brief Reverse lookup of frame ID strs to index
  * 
- * @param fids - String array of FID
+ * @param fids - String array of FIDs
  * @param fids_len - Size of string array
  * @param fid - String to find
  * @return int - Index of string

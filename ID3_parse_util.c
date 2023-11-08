@@ -222,14 +222,13 @@ ID3_METAINFO *get_ID3_metainfo(ID3_METAINFO *metainfo, ID3V2_HEADER *header, FIL
 
 
 
-int sizeof_frame_data(char fid[5], char arg_data[256]) {
+int sizeof_frame_data(char fid[4], char arg_data[256]) {
     int sz = 0;
     int id;
 
-    // Text information frame
-    if ((id = get_index(t_fids, T_FIDS, fid)) != -1) {
+    if ((id = get_index(t_fids, T_FIDS, fid)) != -1) { // Text information frame
         sz += sizeof(TEXT_FRAME) + strlen(arg_data);
-    } else if ((id = get_index(s_fids, S_FIDS, fid)) != -1) {
+    } else if ((id = get_index(s_fids, S_FIDS, fid)) != -1) { // Attached Picture Frame
         switch(id) {
             case 0:
                 FILE *f = fopen(arg_data, "rb");
@@ -238,8 +237,10 @@ int sizeof_frame_data(char fid[5], char arg_data[256]) {
                 sz += 1 + strlen("image/jpeg") + 1 + 1 + 1 + ftell(f);
                 fclose(f);
                 break;
+            default:
+                break;
         } 
-    }
+    } 
 
     return sz;
 }

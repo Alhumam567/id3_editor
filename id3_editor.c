@@ -434,7 +434,8 @@ int main(int argc, char *argv[]) {
 
                 int remaining_metadata_sz = header_metainfo.metadata_sz - (bytes_read + sizeof(ID3V2_FRAME_HEADER) + len_data);
                 new_frame_len = sizeof_frame_data(frame_header.fid, arg_data[fid_index]);
-                edit_frame_data(arg_data[fid_index], new_frame_len, len_data, remaining_metadata_sz, additional_bytes, f);
+                char *frame_data = get_frame_data(frame_header.fid, arg_data[fid_index]);
+                edit_frame_data(frame_data, new_frame_len, len_data, remaining_metadata_sz, additional_bytes, f);
             }
 
             read_frame_data(f, new_frame_len);

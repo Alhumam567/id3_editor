@@ -38,12 +38,13 @@ int write_new_len(int new_len, FILE *f, int verbose) {
  * data block.
  * 
  * @param data - New data to be written 
+ * @param new_data_sz - Length of bytes of new_data
  * @param f - File pointer
  */
-void write_frame_data(char *data, FILE *f) {
+void write_frame_data(char *data, int new_data_sz, FILE *f) {
     fseek(f, 1, SEEK_CUR);
 
-    int written = fwrite(data, strlen(data), 1, f);
+    int written = fwrite(data, new_data_sz, 1, f);
     if (written < 1) {
         printf("Failed to write frame data\n");
         exit(1);
@@ -76,7 +77,7 @@ void write_frame_header(ID3V2_FRAME_HEADER header, FILE *f) {
 
 void append_new_frame(ID3V2_FRAME_HEADER header, char *data, FILE *f) {
     write_frame_header(header, f);
-    write_frame_data(data, f);
+    write_frame_data(data, 0, f); //TODO
 }
 
 
@@ -117,36 +118,32 @@ void rewrite_buffer(signed int offset, int remaining_metadata_size, int zero_buf
  * array of bytes. 
  * 
  * @param data - New data to write
+ * @param new_data_sz - Byte size of the new frame data
  * @param old_data_sz - Byte size of the old data
  * @param remaining_metadata_sz - Size of the remaining buffer of ID3 metadata 
  * @param f - File pointer
- * @return int - Returns the number of bytes written
  */
-int overwrite_frame_data(char *new_data, int old_data_sz, int remaining_metadata_sz, FILE *f) {
+void overwrite_frame_data(char *new_data, int new_data_sz, int old_data_sz, int remaining_metadata_sz, FILE *f) {
     //Clear current data
     char *null_buf = calloc(old_data_sz, 1);
     fwrite(null_buf, old_data_sz, 1, f);
     fseek(f, -1 * old_data_sz, SEEK_CUR);
     free(null_buf);
 
-    int new_len = strlen(new_data) + 1; // Includes null byte in total length
-
     // Shift remaining metadata if the new frame is different sized than the current
-    if (new_len != old_data_sz) {
+    if (new_data_sz != old_data_sz) {
         fseek(f, old_data_sz, SEEK_CUR);
 
-        int zero_buf = (new_len > old_data_sz) ? 0 : 1;
-        rewrite_buffer(new_len - old_data_sz, remaining_metadata_sz, zero_buf, f);
+        int zero_buf = (new_data_sz > old_data_sz) ? 0 : 1;
+        rewrite_buffer(new_data_sz - old_data_sz, remaining_metadata_sz, zero_buf, f);
         
-        fseek(f, -1 * new_len, SEEK_CUR);
+        fseek(f, -1 * new_data_sz, SEEK_CUR);
     } 
 
-    write_frame_data(new_data, f);
+    write_frame_data(new_data, new_data_sz, f);
 
-    fseek(f,-1 * new_len,SEEK_CUR);
+    fseek(f, -1 * new_data_sz, SEEK_CUR);
     fflush(f);
-
-    return new_len;
 }
 
 
@@ -187,7 +184,7 @@ void edit_frame_data(char *new_data, int new_data_len, int prev_data_len, int re
     int new_len_data = write_new_len(new_data_len, f, 0);
     fseek(f, 2 + additional_bytes, SEEK_CUR); 
 
-    overwrite_frame_data(new_data, prev_data_len, remaining_metadata_sz, f);
+    overwrite_frame_data(new_data, new_data_len, prev_data_len, remaining_metadata_sz, f);
 }
 
 

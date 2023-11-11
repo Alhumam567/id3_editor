@@ -245,3 +245,53 @@ int sizeof_frame_data(char fid[4], char arg_data[256]) {
     return sz;
 }
 
+
+
+char *get_frame_data(char fid[4], char arg_data[256]) { 
+    int sz = sizeof_frame_data(fid, arg_data);
+    char *frame_data = malloc(sz + 1);
+    int id;
+
+    frame_data[sz] = '\0';
+
+    if ((id = get_index(t_fids, T_FIDS, fid)) != -1) { // Text information frame
+        frame_data[0] = '\0';
+        strncpy(frame_data + 1, arg_data, strlen(arg_data));
+    } else if ((id = get_index(s_fids, S_FIDS, fid)) != -1) { // Attached Picture Frame
+        switch(id) {
+            case 0:
+                FILE *f = fopen(arg_data, "rb");
+                char *mime_type = "\0image/jpeg";
+                int mime_type_len = strlen(mime_type);
+                int i = 0;
+
+                frame_data[i++] = '\0'; // text encoding
+
+                // MIME type
+                strncpy(frame_data + i, mime_type, mime_type_len);
+                i += mime_type_len;
+                frame_data[i++] = '\0';
+
+                frame_data[i++] = '\0'; // picture type
+
+                frame_data[i++] = '\0'; // description
+
+                // Picture data
+                fseek(f, 0, SEEK_END);
+                int pic_data_len = ftell(f);
+                fseek(f, 0, SEEK_SET);
+                if (fread(frame_data + i, pic_data_len, 1, f) != 1) {
+                    printf("Failed to read picture data.\n");
+                    fclose(f);
+                    exit(1);
+                }
+
+                fclose(f);
+                break;
+            default:
+                break;
+        } 
+    } 
+
+    return frame_data;
+}

@@ -75,9 +75,9 @@ void write_frame_header(ID3V2_FRAME_HEADER header, FILE *f) {
 
 
 
-void append_new_frame(ID3V2_FRAME_HEADER header, char *data, FILE *f) {
+void append_new_frame(ID3V2_FRAME_HEADER header, char *data, int new_data_sz, FILE *f) {
     write_frame_header(header, f);
-    write_frame_data(data, 0, f); //TODO
+    write_frame_data(data, new_data_sz, f); 
 }
 
 

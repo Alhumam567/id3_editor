@@ -436,6 +436,8 @@ int main(int argc, char *argv[]) {
                 new_frame_len = sizeof_frame_data(frame_header.fid, arg_data[fid_index]);
                 char *frame_data = get_frame_data(frame_header.fid, arg_data[fid_index]);
                 edit_frame_data(frame_data, new_frame_len, len_data, remaining_metadata_sz, additional_bytes, f);
+
+                free(frame_data);
             }
 
             read_frame_data(f, new_frame_len);
@@ -453,7 +455,10 @@ int main(int argc, char *argv[]) {
             int_to_header_ssint(1 + strlen(arg_data[i]), frame_header.size);
             strncpy(frame_header.flags, flags, 2);
 
-            append_new_frame(frame_header, arg_data[i], f);
+            int new_frame_len = sizeof_frame_data(frame_header.fid, arg_data[i]);
+            char *frame_data = get_frame_data(frame_header.fid, arg_data[i]);
+            append_new_frame(frame_header, frame_data, new_frame_len, f);
+            free(frame_data);
             
             // Update metainfo struct
             char (*tmp_fids)[4] = malloc((header_metainfo.frame_count+1) * sizeof(char *));

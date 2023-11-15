@@ -6,10 +6,14 @@
 #include <errno.h>
 #include <sys/stat.h>
 
-#include "id3_editor.h"
-#include "id3_parse_util.c"
-#include "file_util.c"
+#include "id3.h"
+#include "id3_parse.h"
+#include "file_util.h"
+#include "util.h"
 
+char t_fids[T_FIDS][5] = {t_fids_arr};
+char s_fids[S_FIDS][5] = {s_fids_arr};
+char fids[E_FIDS][5] = {t_fids_arr , s_fids_arr};
 
 /**
  * @brief Parses command-line arguments to retrieve new frame data and list of files to edit
@@ -97,7 +101,7 @@ void parse_args(int argc, char *argv[],
                 }
                 break;
             case 'n': // TRCK: Track number
-                strncpy(arg_data[3], "1", 1);
+                arg_data[3][0] = '1';
                 printf("Option detected: %s\n", edit_fids[3]);
                 
                 frame_args[3] = 0;
@@ -119,8 +123,8 @@ void parse_args(int argc, char *argv[],
                 printf("Options:\n");
                 printf("\t%-14s\tWrite new artist name ARTIST for all files in path\n", "-a ARTIST, ");
                 printf("\t%-14s\tWrite new album name ALBUM for all files in path\n", "-b ALBUM, ");
-                printf("\t%-14s\tWrite new title(s) for all files in path. If PATH\n\t%-11s\tcontains more than one file, TITLE can contain an\n\t%-11s\tequivalent number of titles, separated by commas.\n", "-t TITLE, ", " ");
-                printf("\t%-14s\tWrite track number for all files in path. If this\n\t%-11s\toption is selected, the track number for the file\n\t%-11s\tmust be contained in beginning of the filename.\n", "-n, ", " ");
+                printf("\t%-14s\tWrite new title(s) for all files in path. If PATH\n\t%-11s\tcontains more than one file, TITLE can contain an\n\t%-11s\tequivalent number of titles, separated by commas.\n", "-t TITLE, ", " ", " ");
+                printf("\t%-14s\tWrite track number for all files in path. If this\n\t%-11s\toption is selected, the track number for the file\n\t%-11s\tmust be contained in beginning of the filename.\n", "-n, ", " ", " ");
                 printf("\t%-14s\tAttach image to all files in path, must be JPEG.\n", "-p IMAGE_PATH, ");
                 
                 exit(0);
@@ -154,6 +158,7 @@ void parse_args(int argc, char *argv[],
         exit(1);
     }
         
+        
     // If filepath arg is a DIR, retrieve all child filepaths for editing
     if (S_ISDIR(statbuf.st_mode)) {
         *is_dir = 1;
@@ -162,7 +167,6 @@ void parse_args(int argc, char *argv[],
         if (!(filepath[*dir_len - 1] == '/' || filepath[*dir_len - 1] == '\\')) *dir_len += 1;
 
         DIR *dir = opendir(filepath);
-        DIR *item_dir;
         struct dirent *entry;
         int file_count = 0;
         int max_filename_len = 0;
@@ -179,7 +183,9 @@ void parse_args(int argc, char *argv[],
                 printf("Error reading input dir file %s, errno: %d", full_path, errno);
                 free(full_path);
                 exit(1);
-            } else if (S_ISREG(statbuf.st_mode) && entry->d_name != "." && entry->d_name != "..") {
+            } else if (S_ISREG(statbuf.st_mode) && 
+                        (strlen(entry->d_name) > 1 || strncmp(entry->d_name, ".", 2) != 0) && 
+                        (strlen(entry->d_name) > 2 || strncmp(entry->d_name, "..", 3) != 0)) {
                 file_count++;
 
                 if (strlen(entry->d_name) > max_filename_len) max_filename_len = strlen(entry->d_name);
@@ -210,8 +216,8 @@ void parse_args(int argc, char *argv[],
             char *full_path = concatenate(filepath_prefix, entry->d_name);
 
             if (stat(full_path, &statbuf) != 0) {
-                free(full_path);
                 printf("Error reading input dir file %s, errno: %d", full_path, errno);
+                free(full_path);
                 exit(1);
             } else if (S_ISREG(statbuf.st_mode)) {
                 if (arg_data[3][0] == '1' && atoi(entry->d_name) <= 0) { // Input validate filename includes track num if opt is set
@@ -422,7 +428,7 @@ int main(int argc, char *argv[]) {
             read_frame_header(&frame_header, f);
 
             int fid_index = get_index(fids, E_FIDS, frame_header.fid);
-            int len_data = get_frame_data_len(frame_header);
+            int len_data = synchsafeint32ToInt(frame_header.size);
             int new_frame_len = len_data;
 
             int readonly = 0;
@@ -452,7 +458,7 @@ int main(int argc, char *argv[]) {
             ID3V2_FRAME_HEADER frame_header;
             char flags[2] = {'\0', '\0'};
             strncpy(frame_header.fid, fids[i], 4);
-            int_to_header_ssint(1 + strlen(arg_data[i]), frame_header.size);
+            intToSynchsafeint32(1 + strlen(arg_data[i]), frame_header.size);
             strncpy(frame_header.flags, flags, 2);
 
             int new_frame_len = sizeof_frame_data(frame_header.fid, arg_data[i]);

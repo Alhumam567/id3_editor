@@ -1,5 +1,9 @@
-#include "id3_editor.h"
-#include "util.c"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "id3.h"
+#include "util.h"
 
 /**
  * @brief Reads ID3 header data of a file. File pointer must be pointing to the start
@@ -79,6 +83,74 @@ ID3V2_FRAME_HEADER *read_frame_header(ID3V2_FRAME_HEADER *h, FILE *f) {
 }
 
 
+void print_data(FILE *f, ID3_METAINFO metainfo) {
+    int frames = metainfo.frame_count;
+
+    printf("Printing file info:\n");
+    printf("\tMetadata Size: %d\n", metainfo.metadata_sz);
+    printf("\tFrame Count: %d\n", metainfo.frame_count);
+    printf("\tFrames: ");
+    for (int i = 0; i < metainfo.frame_count; i++) printf("%.4s;", metainfo.fids[i]);
+    printf("\n");
+
+    int bytes_read = 0; 
+    char *data;
+    char fid_str[5] = {'\0'};
+
+    fseek(f, metainfo.frame_pos, SEEK_SET);
+    
+    // Read Final Data
+    for (int i = 0; i < frames; i++) {
+        ID3V2_FRAME_HEADER frame_header;
+        
+        if (fread(frame_header.fid, 1, 4, f) != 4) {
+            printf("Error occurred reading file identifier.\n");
+            exit(1);
+        }
+        if (fread(frame_header.size, 1, 4, f) != 4) {
+            printf("Error occurred tag size.\n");
+            exit(1);
+        }
+        if (fread(frame_header.flags, 1, 2, f) != 2) {
+            printf("Error occurred flags.\n");
+            exit(1);
+        }
+
+        int readonly = 0;
+        int additional_bytes = parse_frame_header_flags(frame_header.flags, &readonly, f);
+
+        int frame_data_sz = synchsafeint32ToInt(frame_header.size);
+        strncpy(fid_str, frame_header.fid, 4);
+
+        printf("FID: %.4s, ", fid_str);
+        printf("Size: %d\n", frame_data_sz);
+
+        data = malloc(frame_data_sz+1);
+        data[frame_data_sz] = '\0';
+        
+        if (fread(data, 1, frame_data_sz, f) != frame_data_sz){
+            printf("2. Error occurred reading frame data.\n");
+            exit(1);
+        }
+
+        if (strncmp(fid_str, "APIC", 4) != 0) {
+            // Printing char array with intermediate null chars
+            printf("\tData: ");
+            for (int i = 0; i < frame_data_sz; i++) {
+                if (data[i] != '\0') printf("%c", data[i]);
+            }
+            printf("\n");
+        }  
+        else printf("\tImage\n");
+
+        free(data);
+
+        bytes_read += sizeof(ID3V2_FRAME_HEADER) + frame_data_sz + additional_bytes; 
+    }
+}
+
+
+
 
 int parse_ext_header_flags(ID3V2_EXT_HEADER *ext_header, FILE *f) {
     fread(ext_header->size, 4, 1, f);
@@ -146,7 +218,7 @@ int parse_frame_header_flags(char flags[2], int *readonly, FILE *f) {
  * @return ID3_METAINFO* - returns pointer to metainfo struct <metainfo>
  */
 ID3_METAINFO *get_ID3_metainfo(ID3_METAINFO *metainfo, ID3V2_HEADER *header, FILE *f, int verbose) {
-    int x = fseek(f, 10, SEEK_SET); // Set FILE * to end of header
+    fseek(f, 10, SEEK_SET); // Set FILE * to end of header
     metainfo->frame_pos = parse_header_flags(header->flags, f); // Parse header flags and seek past extended header if necessary
 
     int sz = 0;

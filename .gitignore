@@ -1,6 +1,7 @@
 *.hexdump
 *.exe
 *.mp3
+*.o
 misc/
 .vscode
 ./test_folder

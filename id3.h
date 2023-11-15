@@ -1,8 +1,6 @@
 #ifndef HEADER_INC
 #define HEADER_INC
 
-#include <stdio.h>
-
 #define IS_SET(X,Y) ((X >> Y) & 0b1)
 #define IS_READONLY(X) IS_SET(X,4)
 
@@ -12,9 +10,9 @@
 #define s_fids_arr "APIC"
 #define E_FIDS (T_FIDS + S_FIDS)
 
-char t_fids[T_FIDS][5] = {t_fids_arr};
-char s_fids[S_FIDS][5] = {s_fids_arr};
-char fids[E_FIDS][5] = {t_fids_arr , s_fids_arr};
+extern char t_fids[T_FIDS][5];
+extern char s_fids[S_FIDS][5];
+extern char fids[E_FIDS][5];
 
 typedef struct ID3V2_HEADER {
     char fid[3];

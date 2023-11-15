@@ -1,12 +1,9 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-#include "id3_editor.h"
-#include "util.c"
-
-
-int get_frame_data_len(ID3V2_FRAME_HEADER h) {
-    return synchsafeint32ToInt(h.size);
-}
+#include "id3.h"
+#include "util.h"
 
 
 
@@ -148,12 +145,6 @@ void overwrite_frame_data(char *new_data, int new_data_sz, int old_data_sz, int 
 
 
 
-void int_to_header_ssint(int new_len, char header_sz[4]) {
-    intToSynchsafeint32(new_len, header_sz);
-}
-
-
-
 /**
  * @brief Moves file pointer past frame data to the next frame. 
  * 
@@ -181,78 +172,10 @@ int read_frame_data(FILE *f, int len_data) {
 void edit_frame_data(char *new_data, int new_data_len, int prev_data_len, int remaining_metadata_sz, int additional_bytes, FILE *f) {
     // Return file pointer to beginning of new length and write new length
     fseek(f, -1 * (6 + additional_bytes), SEEK_CUR); 
-    int new_len_data = write_new_len(new_data_len, f, 0);
+    write_new_len(new_data_len, f, 0);
     fseek(f, 2 + additional_bytes, SEEK_CUR); 
 
     overwrite_frame_data(new_data, new_data_len, prev_data_len, remaining_metadata_sz, f);
-}
-
-
-
-void print_data(FILE *f, ID3_METAINFO metainfo) {
-    int frames = metainfo.frame_count;
-
-    printf("Printing file info:\n");
-    printf("\tMetadata Size: %d\n", metainfo.metadata_sz);
-    printf("\tFrame Count: %d\n", metainfo.frame_count);
-    printf("\tFrames: ");
-    for (int i = 0; i < metainfo.frame_count; i++) printf("%.4s;", metainfo.fids[i]);
-    printf("\n");
-
-    int bytes_read = 0; 
-    char *data;
-    char fid_str[5] = {'\0'};
-
-    fseek(f, metainfo.frame_pos, SEEK_SET);
-    
-    // Read Final Data
-    for (int i = 0; i < frames; i++) {
-        ID3V2_FRAME_HEADER frame_header;
-        
-        if (fread(frame_header.fid, 1, 4, f) != 4) {
-            printf("Error occurred reading file identifier.\n");
-            exit(1);
-        }
-        if (fread(frame_header.size, 1, 4, f) != 4) {
-            printf("Error occurred tag size.\n");
-            exit(1);
-        }
-        if (fread(frame_header.flags, 1, 2, f) != 2) {
-            printf("Error occurred flags.\n");
-            exit(1);
-        }
-
-        int readonly = 0;
-        int additional_bytes = parse_frame_header_flags(frame_header.flags, &readonly, f);
-
-        int frame_data_sz = synchsafeint32ToInt(frame_header.size);
-        strncpy(fid_str, frame_header.fid, 4);
-
-        printf("FID: %.4s, ", fid_str);
-        printf("Size: %d\n", frame_data_sz);
-
-        data = malloc(frame_data_sz+1);
-        data[frame_data_sz] = '\0';
-        
-        if (fread(data, 1, frame_data_sz, f) != frame_data_sz){
-            printf("2. Error occurred reading frame data.\n");
-            exit(1);
-        }
-
-        if (strncmp(fid_str, "APIC", 4) != 0) {
-            // Printing char array with intermediate null chars
-            printf("\tData: ");
-            for (int i = 0; i < frame_data_sz; i++) {
-                if (data[i] != '\0') printf("%c", data[i]);
-            }
-            printf("\n");
-        }  
-        else printf("\tImage\n");
-
-        free(data);
-
-        bytes_read += sizeof(ID3V2_FRAME_HEADER) + frame_data_sz + additional_bytes; 
-    }
 }
 
 
@@ -320,8 +243,8 @@ FILE* extend_header(int additional_mtdt_sz,
 
 int isJPEG(char *filepath) {
     FILE *img = fopen(filepath, "rb");
-    unsigned char buf[4];
-    unsigned char jfifHeader[] = {0xFF, 0xD8, 0xFF, 0xE0};
+    char buf[4];
+    char jfifHeader[] = {0xFF, 0xD8, 0xFF, 0xE0};
     int read = fread(buf, 4, 1, img);
 
     // SOI
@@ -331,8 +254,8 @@ int isJPEG(char *filepath) {
         return 0;
     }
 
-    unsigned char idBuf[5];
-    unsigned char jfifId[] = {0x4A, 0x46, 0x49, 0x46, 0x0};
+    char idBuf[5];
+    char jfifId[] = {0x4A, 0x46, 0x49, 0x46, 0x0};
     fseek(img, 2, SEEK_CUR);
     read = fread(idBuf, 5, 1, img);
 

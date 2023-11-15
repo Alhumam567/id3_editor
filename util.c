@@ -1,5 +1,6 @@
-#ifndef UTIL_FUNCS
-#define UTIL_FUNCS
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 int synchsafeint32ToInt(char c[4]) {
     return (c[0] << 21) | ((c[1] << 14) | ((c[2] << 7) | (c[3] | (int)0)));
@@ -37,6 +38,3 @@ int get_index(char (*str)[5], int arr_len, char fid[4]) {
 
     return -1;
 }
-
-
-#endif

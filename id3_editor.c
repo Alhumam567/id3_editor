@@ -455,19 +455,22 @@ int main(int argc, char *argv[]) {
             bytes_read += sizeof(ID3V2_FRAME_HEADER) + additional_bytes + len_data; 
         }
 
+        printf("Appending frames to file...\n");
+
         // Append necessary new frames
         for (int i = 0; i < E_FIDS; i++) {
             if (frames_edited[i]) continue;
 
             // Construct new frame header
             ID3V2_FRAME_HEADER frame_header;
-            char flags[2] = {'\0', '\0'};
             strncpy(frame_header.fid, fids[i], 4);
-            intToSynchsafeint32(1 + strlen(arg_data[i]), frame_header.size);
-            strncpy(frame_header.flags, flags, 2);
-
             int new_frame_len = sizeof_frame_data(frame_header.fid, arg_data[i]);
             char *frame_data = get_frame_data(frame_header.fid, arg_data[i]);
+
+            char flags[2] = {'\0', '\0'};
+            intToSynchsafeint32(new_frame_len, frame_header.size);
+            strncpy(frame_header.flags, flags, 2);
+
             append_new_frame(frame_header, frame_data, new_frame_len, f);
             free(frame_data);
             

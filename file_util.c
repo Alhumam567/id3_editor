@@ -39,11 +39,13 @@ int write_new_len(int new_len, FILE *f, int verbose) {
  * @param f - File pointer
  */
 void write_frame_data(char *data, int new_data_sz, FILE *f) {
-    fseek(f, 1, SEEK_CUR);
+    fseek(f, 0, SEEK_CUR);
 
     int written = fwrite(data, new_data_sz, 1, f);
     if (written < 1) {
         printf("Failed to write frame data\n");
+        printf("%d\n", new_data_sz);
+
         exit(1);
     }
 

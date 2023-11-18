@@ -119,7 +119,12 @@ void parse_args(int argc, char *argv[],
                 break;
             case 'h':
                 printf("Usage: ./mp3.exe [OPTION]... PATH\n");
-                printf("Reads and edits ID3 metadata tags.\n");
+                printf("Reads and edits ID3V2.4 metadata tags.\n\n");
+                printf("Supports editing the following tags:\n");
+                printf("\tText Information:\n");
+                for (int i = 0; i < T_FIDS; i++) printf("\t\t%d. %s\n", i+1, t_fids[i]);
+                printf("\tSpecial Information:\n");
+                for (int i = 0; i < S_FIDS; i++) printf("\t\t%d. %s\n", i+1, s_fids[i]);
                 printf("Options:\n");
                 printf("\t%-14s\tWrite new artist name ARTIST for all files in path\n", "-a ARTIST, ");
                 printf("\t%-14s\tWrite new album name ALBUM for all files in path\n", "-b ALBUM, ");

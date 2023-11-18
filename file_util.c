@@ -17,7 +17,7 @@
  */
 int write_new_len(int new_len, FILE *f, int verbose) {
     char synchsafe_nl[4];
-    intToSynchsafeint32(new_len + 1, synchsafe_nl);
+    intToSynchsafeint32(new_len, synchsafe_nl);
     
     if (verbose) {
         for (int i=0; i < 4; i++)
@@ -26,7 +26,7 @@ int write_new_len(int new_len, FILE *f, int verbose) {
     
     fwrite(synchsafe_nl, 1, 4, f);
 
-    return new_len + 1;
+    return new_len;
 }
 
 

@@ -389,6 +389,7 @@ int main(int argc, char *argv[]) {
     for (int i = 0; i < E_FIDS; i++) frame_args[i] = 1;
 
     char arg_data[E_FIDS][256]; //Data for arguments specified
+    memset(arg_data, '\0', E_FIDS*256);
 
     char *titles = NULL;
     int num_titles = 0;

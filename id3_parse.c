@@ -83,6 +83,12 @@ ID3V2_FRAME_HEADER *read_frame_header(ID3V2_FRAME_HEADER *h, FILE *f) {
 }
 
 
+/**
+ * @brief Reads and prints ID3 file frame data
+ * 
+ * @param f - ID3 File
+ * @param metainfo - Metainfo of <f>
+ */
 void print_data(FILE *f, ID3_METAINFO metainfo) {
     int frames = metainfo.frame_count;
 
@@ -293,7 +299,17 @@ ID3_METAINFO *get_ID3_metainfo(ID3_METAINFO *metainfo, ID3V2_HEADER *header, FIL
 }
 
 
-
+/**
+ * @brief Calculates the size of the given frame data. 
+ * 
+ * Text Information Frames: Include an encoding byte prior to text data, refer to TEXT_FRAME type
+ * Attached Picture Frames: Include an encoding byte, MIME type, picture type, and description prior to 
+ * text data, refer to APIC_FRAME type
+ * 
+ * @param fid - Frame ID 
+ * @param arg_data - Provided argument data
+ * @return int - Size of the frame
+ */
 int sizeof_frame_data(char fid[4], char arg_data[256]) {
     int sz = 0;
     int id;
@@ -318,7 +334,13 @@ int sizeof_frame_data(char fid[4], char arg_data[256]) {
 }
 
 
-
+/**
+ * @brief Byte array of the entire frame data, including necessary data header info (encoding, image type, etc.)
+ * 
+ * @param fid - Frame ID
+ * @param arg_data - Provided argument data
+ * @return char* - Frame data byte array
+ */
 char *get_frame_data(char fid[4], char arg_data[256]) { 
     int sz = sizeof_frame_data(fid, arg_data);
     char *frame_data = malloc(sz + 1);

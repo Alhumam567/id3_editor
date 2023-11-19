@@ -42,8 +42,6 @@ void verify(char args[E_FIDS][256]) {
 
 void test(char args[E_FIDS][256]) {
 	file_copy(testfile_bk, testfile); // Reset testing file
-
-	system("echo Test");
 }
 
 int main(int argc, char *argv[]) {

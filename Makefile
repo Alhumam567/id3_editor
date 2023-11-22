@@ -8,4 +8,4 @@ test.exe: util.o id3_parse.o test.o
 	gcc -Wall -c $< -o $@
 
 clean:
-	rm -f id3_editor.o id3_parse.o file_util.o util.o id3_editor.exe
+	rm -f id3_editor.o id3_parse.o file_util.o util.o test.o id3_editor.exe test.exe

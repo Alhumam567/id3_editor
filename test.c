@@ -35,6 +35,7 @@ ID3V2_HEADER testfile_header;
 ID3_METAINFO testfile_info;
 
 int file_copy(const char *src, const char *dst);
+char *get_cmd_str(char args[E_FIDS][256]);
 
 void verify(char args[E_FIDS][256]) {
 	
@@ -42,6 +43,10 @@ void verify(char args[E_FIDS][256]) {
 
 void test(char args[E_FIDS][256]) {
 	file_copy(testfile_bk, testfile); // Reset testing file
+
+	char *cmd = get_cmd_str(args);
+
+	printf("%s\n", cmd);
 }
 
 int main(int argc, char *argv[]) {
@@ -49,15 +54,23 @@ int main(int argc, char *argv[]) {
 	memset(args, 0, E_FIDS*256);
 
 	FILE *tf = fopen(testfile, "rb");
-	read_header(&testfile_header, tf, testfile, 1);
-	get_ID3_metainfo(&testfile_info, &testfile_header, tf, 1);
+	read_header(&testfile_header, tf, testfile, 0);
+	get_ID3_metainfo(&testfile_info, &testfile_header, tf, 0);
 
 	if (file_copy(testfile, testfile_bk)) {
 		printf("Error reading test file.\n");
 		exit(1);
 	}
 
+	strncpy(args[0], "Alhumam J.", strlen("Alhumam J.") + 1);
+	strncpy(args[1], "My Album", strlen("My Album") + 1);
 	test(args);
+	memset(args, 0, E_FIDS*256);
+
+	strncpy(args[2], "My Title", strlen("My Title") + 1);
+	strncpy(args[3], "1", 1 + 1);
+	test(args);
+	memset(args, 0, E_FIDS*256);
 
     return 0;
 }
@@ -78,4 +91,27 @@ int file_copy(const char *src, const char *dst) {
 	fclose(dst_f);
 
 	return 0;
+}
+
+char *get_cmd_str(char args[E_FIDS][256]) {
+	char *cmd = calloc((E_FIDS+1)*256, sizeof(char));
+
+	strncat(cmd, "./id3_editor.exe ", strlen("./id3_editor.exe ") + 1);
+	
+	char opts[E_FIDS][5] = {"-a ", "-b ", "-t ", "-n ", "-p "};
+	for (int i = 0; i < E_FIDS; i++) {
+		if (args[i][0] == '\0') continue;
+
+		strncat(cmd, opts[i], 4);
+
+		if (strncmp(opts[i], "-n ", 3) == 0) continue;
+
+		strncat(cmd, "\"", 2);
+		strncat(cmd, args[i], strlen(args[i])+1);
+		strncat(cmd, "\" ", 3);
+	}
+
+	strncat(cmd, testfile, strlen(testfile));
+
+	return cmd;
 }

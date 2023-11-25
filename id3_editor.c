@@ -32,6 +32,7 @@ char fids[E_FIDS][5] = {t_fids_arr , s_fids_arr};
  * @param dir_len - Length of filepath directory-to prefix, 0 if arg passed is file.
  * @param titles - Used to save original str to tokenize when writing multiple distinct titles
  * @param num_titles - Pointer to int to save number of titles if provided in args
+ * @param verbose - Verbose option selected
  */
 void parse_args(int argc, char *argv[], 
                 char edit_fids[E_FIDS][5],
@@ -43,7 +44,8 @@ void parse_args(int argc, char *argv[],
                 int *is_dir,
                 int *dir_len,
                 char **titles,
-                int *num_titles) {
+                int *num_titles,
+                int *verbose) {
     
     //File or Dir path is required at minimum
     if (argc < 2) {
@@ -55,13 +57,13 @@ void parse_args(int argc, char *argv[],
     extern char *optarg;
     extern int optind, optopt;
 
-    while((opt = getopt(argc, argv, "+a:b:t:p:nh")) != -1) {
+    while((opt = getopt(argc, argv, "+a:b:t:p:nhv")) != -1) {
         switch(opt) {
             case 'a': // TPE1: Artist name 
                 if (strlen(optarg) > 256) errflag++;
                 else {
                     strncpy(arg_data[0], optarg, strlen(optarg));
-                    printf("Option detected: %s - %s\n", edit_fids[0], arg_data[0]);
+                    // printf("Option detected: %s - %s\n", edit_fids[0], arg_data[0]);
 
                     frame_args[0] = 0;
                 }
@@ -70,7 +72,7 @@ void parse_args(int argc, char *argv[],
                 if (strlen(optarg) > 256) errflag++;
                 else {
                     strncpy(arg_data[1], optarg, strlen(optarg));
-                    printf("Option detected: %s - %s\n", edit_fids[1], arg_data[1]);
+                    // printf("Option detected: %s - %s\n", edit_fids[1], arg_data[1]);
                 
                     frame_args[1] = 0;
                 }
@@ -97,18 +99,18 @@ void parse_args(int argc, char *argv[],
                     }
 
                     frame_args[2] = 0;
-                    printf("Option detected: %s - %s\n", edit_fids[2], arg_data[2]);
+                    // printf("Option detected: %s - %s\n", edit_fids[2], arg_data[2]);
                 }
                 break;
             case 'n': // TRCK: Track number
                 arg_data[3][0] = '1';
-                printf("Option detected: %s\n", edit_fids[3]);
+                // printf("Option detected: %s\n", edit_fids[3]);
                 
                 frame_args[3] = 0;
                 break;
             case 'p': // APIC: Attached Picture
                 strncpy(arg_data[4], optarg, strlen(optarg));
-                printf("Option detected: %s\n", edit_fids[4]);
+                // printf("Option detected: %s\n", edit_fids[4]);
 
                 if (!isJPEG(arg_data[4])) {
                     printf("Image specified is not a JPEG.\n");
@@ -133,6 +135,9 @@ void parse_args(int argc, char *argv[],
                 printf("\t%-14s\tAttach image to all files in path, must be JPEG.\n", "-p IMAGE_PATH, ");
                 
                 exit(0);
+                break;
+            case 'v':
+                *verbose = 1;
                 break;
             case '?':
                 printf("Option \'%c\' is not recognized.\n", optopt);
@@ -266,8 +271,6 @@ void parse_args(int argc, char *argv[],
         **path = malloc(strlen(filepath));
         **path = filepath;
     }
-
-    printf("\n");
 }
 
 
@@ -292,11 +295,11 @@ void print_args(int path_size, char **path, char arg_data[E_FIDS][256], int dir_
 
 
 
-void update_arg_data(char arg_data[E_FIDS][256], char fids[E_FIDS][5], char **path, int id, int dir_len, int num_titles, int frames_edited[E_FIDS]) {
+void update_arg_data(char arg_data[E_FIDS][256], char fids[E_FIDS][5], char **path, int id, int dir_len, int num_titles, int frames_edited[E_FIDS], int verbose) {
     // Updating track name data for next file
     int trck_ind = get_index(fids, E_FIDS, "TRCK");
     if (frames_edited[trck_ind] == 0) {
-        printf("Updating track index.\n");
+        if (verbose) printf("Updating track index.\n");
 
         char trck[4] = {'\0'};
         int int_trck = get_trck(path[id], dir_len);
@@ -307,7 +310,7 @@ void update_arg_data(char arg_data[E_FIDS][256], char fids[E_FIDS][5], char **pa
     // Updating title data for next file
     int tit2_ind = get_index(fids, E_FIDS, "TIT2");
     if (id > 0 && frames_edited[tit2_ind] == 0 && num_titles > 1) { 
-        printf("Updating track title.\n");
+        if (verbose) printf("Updating track title.\n");
 
         char *tok = strtok(NULL, ",");  
         strncpy(arg_data[tit2_ind], tok, strlen(tok));
@@ -384,6 +387,7 @@ int main(int argc, char *argv[]) {
     int path_size; //Number of files in <path>;
     int is_dir = 0; //Boolean flag for given path is directory 
     int dir_len = 0; //Length of directory prefix in filepath
+    int verbose = 0;
 
     int frame_args[E_FIDS]; //Array of bool flags representing frames that need to be edited
     for (int i = 0; i < E_FIDS; i++) frame_args[i] = 1;
@@ -394,8 +398,8 @@ int main(int argc, char *argv[]) {
     char *titles = NULL;
     int num_titles = 0;
 
-    parse_args(argc, argv, fids, frame_args, arg_data, E_FIDS, &path, &path_size, &is_dir, &dir_len, &titles, &num_titles);
-    print_args(path_size, path, arg_data, dir_len, is_dir);
+    parse_args(argc, argv, fids, frame_args, arg_data, E_FIDS, &path, &path_size, &is_dir, &dir_len, &titles, &num_titles, &verbose);
+    if (verbose) print_args(path_size, path, arg_data, dir_len, is_dir);
 
     // Open, edit, and print ID3 metadata for each file  
     for (int id = 0; id < path_size; id++) {
@@ -408,13 +412,13 @@ int main(int argc, char *argv[]) {
         ID3V2_HEADER header;
         ID3_METAINFO header_metainfo;
         int frames_edited[E_FIDS];
-        read_header(&header, f, path[id], 1);
-        get_ID3_metainfo(&header_metainfo, &header, f, 1);
+        read_header(&header, f, path[id], verbose);
+        get_ID3_metainfo(&header_metainfo, &header, f, verbose);
         memcpy(frames_edited, frame_args, sizeof(frames_edited));
 
-        update_arg_data(arg_data, fids, path, id, dir_len, num_titles, frames_edited);
+        update_arg_data(arg_data, fids, path, id, dir_len, num_titles, frames_edited, verbose);
 
-        printf("Calculating additional metadata.\n");
+        if (verbose) printf("Calculating additional metadata.\n");
         
         // Calculate new metadata size to predict if metadata header has to be extended
         int additional_mtdt_sz = get_additional_mtdt_sz(frames_edited, header_metainfo, arg_data);
@@ -424,7 +428,7 @@ int main(int argc, char *argv[]) {
             get_ID3_metainfo(&header_metainfo, &header, f, 0);
         }
 
-        printf("Editing file...\n\n");
+        if (verbose) printf("Editing file...\n\n");
 
         int bytes_read = 0;
 
@@ -456,7 +460,7 @@ int main(int argc, char *argv[]) {
             bytes_read += sizeof(ID3V2_FRAME_HEADER) + additional_bytes + len_data; 
         }
 
-        printf("Appending frames to file...\n");
+        if (verbose) printf("Appending frames to file...\n");
 
         // Append necessary new frames
         for (int i = 0; i < E_FIDS; i++) {
@@ -486,10 +490,12 @@ int main(int argc, char *argv[]) {
             header_metainfo.frame_count++;
         }
         
-        // Print all ID3 tags
-        printf("Reading %s metadata :\n\n", path[id]);
-        print_data(f, header_metainfo); 
-         
+        if (verbose) {
+            // Print all ID3 tags
+            printf("Reading %s metadata :\n\n", path[id]);
+            print_data(f, header_metainfo); 
+        }
+        
         free_id3_data(&header_metainfo);
         fclose(f);
     }

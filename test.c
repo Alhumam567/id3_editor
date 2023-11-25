@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 
 #include "id3.h"
 #include "id3_parse.h"
@@ -27,6 +28,10 @@
 			- Metadata size
 */
 
+#define FAIL "\033[1;31m"
+#define PASS "\033[1;32m"
+#define RESET "\033[0m"
+
 char t_fids[T_FIDS][5] = {t_fids_arr};
 char s_fids[S_FIDS][5] = {s_fids_arr};
 char fids[E_FIDS][5] = {t_fids_arr , s_fids_arr};
@@ -36,6 +41,7 @@ char *testfile_bk = "test\\testfile.mp3.bk";
 ID3V2_HEADER testfile_header;
 ID3_METAINFO testfile_info;
 
+void cprintf(const char *color_code, const char *fmt, ...);
 int file_copy(const char *src, const char *dst);
 char *get_cmd_str(char *testfile, const char args[E_FIDS][256]);
 
@@ -84,15 +90,15 @@ int verify(char *testfile, char args[E_FIDS][256], char frames_edited[E_FIDS]) {
 		if (frames_edited[id]) { // Edited frame
 			char *data_arg = get_frame_data(frame_header.fid, args[id]);
 			int data_arg_sz = sizeof_frame_data(frame_header.fid, args[id]);
-			printf("%s\n", args[i]);
+			
 			if (frame_data_sz != data_arg_sz) {
-				printf("Failed Size diff %.4s: \n\tfdz: %d | das: %d\n", frame_header.fid, frame_data_sz, data_arg_sz);
+				cprintf(FAIL, "Failed Size diff %.4s: \n\tfdz: %d | das: %d\n", frame_header.fid, frame_data_sz, data_arg_sz);
 				return 1;
 			}
 
 			for (int j = 0; j < frame_data_sz; j++) {
 				if (data[j] != data_arg[j]) {
-					printf("\033[1;31mData is not equal %.4s.\033[0m\n", frame_header.fid);
+					cprintf(FAIL, "Data is not equal %.4s.\033[0m\n", frame_header.fid);
 					return 1;
 				}
 			}
@@ -109,11 +115,10 @@ int test(char *testfile, char args[E_FIDS][256], char frames_edited[E_FIDS]) {
 	file_copy(testfile_bk, testfile); 
 
 	char *cmd = get_cmd_str(testfile, args);
-	printf("Test: %s\n", cmd);
+	printf("Test Name: %s\n", cmd + strlen(exec_path) + 1);
 
 	int fail = system(cmd);
 	if (fail != 0) {
-		printf("system returned fail.\n");
 		return fail;
 	}
 
@@ -139,6 +144,7 @@ int main(int argc, char *argv[]) {
 		exit(1);
 	}
 
+	int tests = 0;
 	int fails = 0;
 
 	{ // Single File Unit Tests
@@ -169,14 +175,17 @@ int main(int argc, char *argv[]) {
 		{ // TRCK: Track Number
 			strncpy(args[3], "1", 2);
 			frames_edited[3] = 1;
-			char *trck_testfile = "test\\1 testfile.mp3.bk";
+			char *trck_testfile = "test\\1 testfile.mp3";
 			fails += test(trck_testfile, args, frames_edited);
 			memset(args, 0, E_FIDS*256);
 			memset(frames_edited, 0, sizeof(char)*E_FIDS);
 		}
+
+		tests += 4;
 	}
 
-	printf("\nFails: %d\n", fails);
+	cprintf(PASS, "Passes: %d\n", tests - fails);
+	cprintf(FAIL, "Fails: %d\n", fails);
 	
     return 0;
 }
@@ -220,7 +229,16 @@ char *get_cmd_str(char *testfile, const char args[E_FIDS][256]) {
 
 	strncat(cmd, "\"", 2);
 	strncat(cmd, testfile, strlen(testfile));
-	strncat(cmd, "\" ", 3);
+	strncat(cmd, "\"", 3);
 
 	return cmd;
+}
+
+void cprintf(const char *color, const char *fmt, ...) {
+	va_list args;
+	va_start(args, fmt);
+	printf(color);
+	vprintf(fmt, args);
+	printf(RESET);
+	va_end(args);
 }

@@ -30,6 +30,8 @@
 
 #define FAIL "\033[1;31m"
 #define PASS "\033[1;32m"
+#define YELLOW "\033[33m"
+#define BLUE "\033[34m"
 #define RESET "\033[0m"
 
 char t_fids[T_FIDS][5] = {t_fids_arr};
@@ -115,14 +117,16 @@ int test(char *testfile, char args[E_FIDS][256], char frames_edited[E_FIDS]) {
 	file_copy(testfile_bk, testfile); 
 
 	char *cmd = get_cmd_str(testfile, args);
-	printf("Test Name: %s\n", cmd + strlen(exec_path) + 1);
-
+	
 	int fail = system(cmd);
-	if (fail != 0) {
-		return fail;
-	}
+	if (fail != 0) return fail;
 
 	fail = verify(testfile, args, frames_edited);
+
+	cprintf(YELLOW, "\tTest ");
+	if (!fail) cprintf(PASS, "PASS");
+	else cprintf(FAIL, "FAIL");
+	cprintf(BLUE, ": %s\n", cmd + strlen(exec_path) + 1);
 
 	return fail;
 }
@@ -148,6 +152,8 @@ int main(int argc, char *argv[]) {
 	int fails = 0;
 
 	{ // Single File Unit Tests
+		cprintf(YELLOW, "Single File Unit Tests:\n");
+
 		{ // TPE1: Artist
 			strncpy(args[0], "Alhumam J.", 256);
 			frames_edited[0] = 1;
@@ -182,10 +188,13 @@ int main(int argc, char *argv[]) {
 		}
 
 		tests += 4;
+		cprintf(PASS, "\tPasses: %d\n", tests - fails);
+		cprintf(FAIL, "\tFails: %d\n", fails);
 	}
 
-	cprintf(PASS, "Passes: %d\n", tests - fails);
-	cprintf(FAIL, "Fails: %d\n", fails);
+	printf("\n");
+	cprintf(PASS, "Total Passes: %d\n", tests - fails);
+	cprintf(FAIL, "Total Fails: %d\n", fails);
 	
     return 0;
 }

@@ -32,6 +32,7 @@
 #define PASS "\033[1;32m"
 #define YELLOW "\033[33m"
 #define BLUE "\033[34m"
+#define PURP "\033[1;35m"
 #define RESET "\033[0m"
 
 char t_fids[T_FIDS][5] = {t_fids_arr};
@@ -55,41 +56,31 @@ int verify(char *testfile, char args[E_FIDS][256], char frames_edited[E_FIDS]) {
 	int frames = testfile_info.frame_count;
 
     char *data;
-    char fid_str[5] = {'\0'};
 
     fseek(tf, testfile_info.frame_pos, SEEK_SET);
     
     for (int i = 0; i < frames; i++) {
         ID3V2_FRAME_HEADER frame_header;
-        if (fread(frame_header.fid, 1, 4, tf) != 4) {
-            printf("Error occurred reading file identifier.\n");
-            return 1;
-        }
-        if (fread(frame_header.size, 1, 4, tf) != 4) {
-            printf("Error occurred tag size.\n");
-            return 1;
-        }
-        if (fread(frame_header.flags, 1, 2, tf) != 2) {
-            printf("Error occurred flags.\n");
-            return 1;
-        }
+        read_frame_header(&frame_header, tf);
 
         int readonly = 0;
         parse_frame_header_flags(frame_header.flags, &readonly, tf);
 
         int frame_data_sz = synchsafeint32ToInt(frame_header.size);
-        strncpy(fid_str, frame_header.fid, 4);
-
         data = malloc(frame_data_sz+1);
         data[frame_data_sz] = '\0';
         
-        if (fread(data, 1, frame_data_sz, tf) != frame_data_sz){
+        if (!fread(data, frame_data_sz, 1, tf)){
             printf("Error occurred reading frame data.\n");
             return 1;
         }
 
+		// TODO: Verify integrity of all data, not just edited data
+
+		// Verify frame data of edits is valid and correct
 		int id = get_index(fids, E_FIDS, frame_header.fid);
-		if (frames_edited[id]) { // Edited frame
+		if (readonly && frames_edited[id] == 1) return 1;
+		if (frames_edited[id] == 1) { // Edited frame
 			char *data_arg = get_frame_data(frame_header.fid, args[id]);
 			int data_arg_sz = sizeof_frame_data(frame_header.fid, args[id]);
 			
@@ -104,7 +95,7 @@ int verify(char *testfile, char args[E_FIDS][256], char frames_edited[E_FIDS]) {
 					return 1;
 				}
 			}
-		}
+		} 
 
         free(data);
     }
@@ -123,7 +114,7 @@ int test(char *testfile, char args[E_FIDS][256], char frames_edited[E_FIDS]) {
 
 	fail = verify(testfile, args, frames_edited);
 
-	cprintf(YELLOW, "\tTest ");
+	printf("\tTest ");
 	if (!fail) cprintf(PASS, "PASS");
 	else cprintf(FAIL, "FAIL");
 	cprintf(BLUE, ": %s\n", cmd + strlen(exec_path) + 1);
@@ -148,11 +139,11 @@ int main(int argc, char *argv[]) {
 		exit(1);
 	}
 
-	int tests = 0;
-	int fails = 0;
+	int total_tests = 0, total_fails = 0;
 
 	{ // Single File Unit Tests
-		cprintf(YELLOW, "Single File Unit Tests:\n");
+		int tests = 0, fails = 0;
+		cprintf(PURP, "Single File Unit Tests:\n");
 
 		{ // TPE1: Artist
 			strncpy(args[0], "Alhumam J.", 256);
@@ -190,11 +181,42 @@ int main(int argc, char *argv[]) {
 		tests += 4;
 		cprintf(PASS, "\tPasses: %d\n", tests - fails);
 		cprintf(FAIL, "\tFails: %d\n", fails);
+
+		total_tests += tests;
+		total_fails += fails;
+	}
+
+	{ // All Arguments Combined Single File Test
+		int tests = 0, fails = 0;
+		cprintf(PURP, "All Arguments Combined Single File Test:\n");
+
+		{
+			strncpy(args[0], "Alhumam J.", 256);
+			strncpy(args[2], "My Title", 256);
+			strncpy(args[1], "My Album", 256);
+			strncpy(args[3], "1", 2);
+			frames_edited[0] = 1;
+			frames_edited[1] = 1;
+			frames_edited[2] = 1;
+			frames_edited[3] = 1;
+			char *trck_testfile = "test\\1 testfile.mp3";
+			fails += test(trck_testfile, args, frames_edited);
+			memset(args, 0, E_FIDS*256);
+			memset(frames_edited, 0, sizeof(char)*E_FIDS);
+		}
+
+		tests += 1;
+		cprintf(PASS, "\tPasses: %d\n", tests - fails);
+		cprintf(FAIL, "\tFails: %d\n", fails);
+
+		total_tests += tests;
+		total_fails += fails;
 	}
 
 	printf("\n");
-	cprintf(PASS, "Total Passes: %d\n", tests - fails);
-	cprintf(FAIL, "Total Fails: %d\n", fails);
+	printf("Total Tests: %d\n", total_tests);
+	cprintf(PASS, "Total Passes: %d\n", total_tests - total_fails);
+	cprintf(FAIL, "Total Fails: %d\n", total_fails);
 	
     return 0;
 }

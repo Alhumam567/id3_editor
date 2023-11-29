@@ -80,7 +80,7 @@ void parse_args(int argc, char *argv[],
             case 't': // TIT2: Title
                 if (strlen(optarg) > 256) errflag++;
                 else {
-                    (*titles) = malloc(256); 
+                    (*titles) = calloc(256, sizeof(char)); 
                     strncpy(*titles, optarg, strlen(optarg));   
 
                     char *tok = strtok(*titles, ",");
@@ -88,7 +88,7 @@ void parse_args(int argc, char *argv[],
                         (*num_titles)++;
                         tok = strtok(NULL, ",");
                     }
-
+                    
                     strncpy(*titles, optarg, strlen(optarg)); 
                     if (*num_titles > 1) {
                         tok = strtok(*titles, ",");   
@@ -211,7 +211,7 @@ void parse_args(int argc, char *argv[],
 
         // Validate number of files with number of titles
         if (frame_args[2] == 0 && (*num_titles != 1 && *num_titles != file_count)) {
-            printf("Error, number of titles provided is invalid with the number of files being edited. 1\n");
+            printf("Error, number of titles provided is invalid with the number of files being edited.\n");
             exit(0);
         }
 

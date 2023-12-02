@@ -70,3 +70,17 @@ int get_index(char (*str)[5], int arr_len, char fid[4]) {
 
     return -1;
 }
+
+
+
+char *get_fid(int i) {
+    switch(i) {
+        case 0: return "TPE1";
+        case 1: return "TALB";
+        case 2: return "TIT2";
+        case 3: return "TRCK";
+        case 4: return "APIC";
+    }
+
+    return "1111";
+}

@@ -11,4 +11,6 @@ extern int get_trck(char *filepath, int prefix_len);
 
 extern int get_index(char (*str)[5], int arr_len, char fid[4]);
 
+extern char *get_fid(int i);
+
 #endif

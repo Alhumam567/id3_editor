@@ -56,7 +56,7 @@ int file_copy(const char *src, const char *dst);
 char *get_cmd_str(char *testfile, const char args[E_FIDS][256]);
 int test(char *testfile_path, char args[E_FIDS][256], int frames_edited[E_FIDS]);
 int assert(const TEST_DATA *expected_data, const TEST_DATA *real_data);
-void read_arg_data(TEST_DATA expected, const ID3_METAINFO metainfo, const char args[E_FIDS][256], const int frames_edited[E_FIDS]);
+void read_arg_data(TEST_DATA *expected, const ID3_METAINFO metainfo, const char args[E_FIDS][256], const int frames_edited[E_FIDS]);
 
 int main(int argc, char *argv[]) {
 	char args[E_FIDS][256];
@@ -82,7 +82,7 @@ int main(int argc, char *argv[]) {
 		cprintf(PURP, "Single File Unit Tests:\n");
 
 		{ // TPE1: Artist
-			strncpy(args[0], "Alhumam J.", 256);
+			strncpy(args[0], "New Author", 256);
 			frames_edited[0] = 1;
 			fails += test(testfile, args, frames_edited);
 			memset(args, 0, E_FIDS*256);
@@ -165,12 +165,13 @@ int main(int argc, char *argv[]) {
 }
 
 int assert(const TEST_DATA *expected, const TEST_DATA *real) {
-	if ((*expected).frame_count != (*real).frame_count) return 1;
+	if (expected->frame_count != real->frame_count) return 1;
 	
-	for (int i = 0; i < (*expected).frame_count; i++) {
-		if ((*expected).sz[i] != (*real).sz[i]) return 1;
-		for (int j = 0; j < (*expected).sz[i]; j++) if((*expected).data[j] != (*real).data[j]) return 1;
+	for (int i = 0; i < expected->frame_count; i++) {
 		// TODO: readonly checks
+		if (expected->sz[i] != real->sz[i] || 
+			memcmp(expected->data[i], real->data[i], real->sz[i])) 
+			return 1;
 	}
 
 	return 0;
@@ -193,9 +194,10 @@ int test(char *testfile_path, char args[E_FIDS][256], int frames_edited[E_FIDS])
 	expected.frame_count = testfile_info.frame_count;
 	read_data(testfile_info, expected.data, expected.sz, f);
 	memcpy(expected.fid, testfile_info.fids, testfile_info.frame_count * 4);
-	read_arg_data(expected, testfile_info, args, frames_edited);
+	read_arg_data(&expected, testfile_info, args, frames_edited);
 	fclose(f);
 
+	
 	f = fopen(testfile_path, "rb");
 	int fail = system(cmd);
 	if (fail != 0) return fail;
@@ -222,20 +224,20 @@ int test(char *testfile_path, char args[E_FIDS][256], int frames_edited[E_FIDS])
 	return fail;
 }
 
-void read_arg_data(TEST_DATA expected, ID3_METAINFO metainfo, const char args[E_FIDS][256], const int frames_edited[E_FIDS]) {
+void read_arg_data(TEST_DATA *expected, ID3_METAINFO metainfo, const char args[E_FIDS][256], const int frames_edited[E_FIDS]) {
 	int frames_edited_cp[E_FIDS];
 	memcpy(frames_edited_cp, frames_edited, E_FIDS * sizeof(int));
 
-	for (int i = 0; i < expected.frame_count; i ++) {
-		int id = get_index(fids, E_FIDS, expected.fid[i]);
+	for (int i = 0; i < expected->frame_count; i ++) {
+		int id = get_index(fids, E_FIDS, expected->fid[i]);
 
 		if (id != -1 && frames_edited_cp[id] == 1) {
-			expected.sz[i] = sizeof_frame_data(expected.fid[i], args[i]);
-			free(expected.data[i]);
-			expected.data[i] = calloc(expected.sz[i], sizeof(char));
-            memcpy(expected.data[i], get_frame_data(expected.fid[i], args[i]), expected.sz[i]);
+			expected->sz[i] = sizeof_frame_data(expected->fid[i], args[id]);
+			free(expected->data[i]);
+			expected->data[i] = calloc(expected->sz[i], sizeof(char));
+            memcpy(expected->data[i], get_frame_data(expected->fid[i], args[id]), expected->sz[i]);
 
-			frames_edited_cp[id] = 1;
+			frames_edited_cp[id] = 0;
 		}
 	}
 
@@ -243,24 +245,24 @@ void read_arg_data(TEST_DATA expected, ID3_METAINFO metainfo, const char args[E_
 	for (int i = 0; i < E_FIDS; i ++) if (frames_edited_cp[i]) additional_frames++;
 
 	if (additional_frames > 0) {
-		int total_frame_count = expected.frame_count + additional_frames;
+		int total_frame_count = expected->frame_count + additional_frames;
 
 		char (*_fid)[4] = calloc(total_frame_count, 4);
 		char **_data = calloc(total_frame_count, sizeof(char *));
 		int *_sz = calloc(total_frame_count, sizeof(int));
 
-		memcpy(_fid, expected.fid, expected.frame_count * 4);
-		memcpy(_sz, expected.sz, expected.frame_count * sizeof(int));
-		for (int i = 0; i < expected.frame_count; i ++) {
-			_data[i] = calloc(expected.sz[i], sizeof(char));
-			memcpy(_data[i], expected.data[i], expected.sz[i]);
+		memcpy(_fid, expected->fid, expected->frame_count * 4);
+		for (int i = 0; i < expected->frame_count; i ++) {
+			_data[i] = calloc(expected->sz[i], sizeof(char));
+			_sz[i] = expected->sz[i];
+			memcpy(_data[i], expected->data[i], expected->sz[i]);
 		}	
 		
-		free(expected.data);
-		free(expected.sz);
-		free(expected.fid);
+		free(expected->data);
+		free(expected->sz);
+		free(expected->fid);
 
-		int ind = expected.frame_count;
+		int ind = expected->frame_count;
 			
 		for (int i = 0; i < E_FIDS; i ++) { 
 			if (frames_edited_cp[i]) {
@@ -269,13 +271,14 @@ void read_arg_data(TEST_DATA expected, ID3_METAINFO metainfo, const char args[E_
             	memcpy(_data[ind], get_frame_data(get_fid(i), args[i]), _sz[ind]);
 
 				ind++;
-				frames_edited_cp[i] = 1;
+				frames_edited_cp[i] = 0;
 			}
 		}
 
-		expected.data = _data;
-		expected.sz = _sz;
-		expected.fid = _fid;
+		expected->data = _data;
+		expected->sz = _sz;
+		expected->fid = _fid;
+		expected->frame_count = total_frame_count;
 	}
 }
 

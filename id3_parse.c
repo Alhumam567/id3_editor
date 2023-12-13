@@ -342,13 +342,14 @@ int sizeof_frame_data(char fid[4], const char arg_data[256]) {
         sz += sizeof(TEXT_FRAME) + strlen(arg_data);
     } else if ((id = get_index(s_fids, S_FIDS, fid)) != -1) { // Attached Picture Frame
         switch(id) {
-            case 0:
+            case 0: {
                 FILE *f = fopen(arg_data, "rb");
                 fseek(f, 0, SEEK_END);
 
                 sz += 1 + strlen("image/jpeg") + 1 + 1 + 1 + ftell(f);
                 fclose(f);
                 break;
+            }
             default:
                 break;
         } 
@@ -377,7 +378,7 @@ char *get_frame_data(char fid[4], const char arg_data[256]) {
         strncpy(frame_data + 1, arg_data, strlen(arg_data));
     } else if ((id = get_index(s_fids, S_FIDS, fid)) != -1) { // Attached Picture Frame
         switch(id) {
-            case 0:
+            case 0: {
                 FILE *f = fopen(arg_data, "rb");
                 char *mime_type = "\0image/jpeg";
                 int mime_type_len = strlen(mime_type);
@@ -406,6 +407,7 @@ char *get_frame_data(char fid[4], const char arg_data[256]) {
 
                 fclose(f);
                 break;
+            }
             default:
                 break;
         } 

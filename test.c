@@ -39,8 +39,8 @@ char t_fids[T_FIDS][5] = {t_fids_arr};
 char s_fids[S_FIDS][5] = {s_fids_arr};
 char fids[E_FIDS][5] = {t_fids_arr , s_fids_arr};
 
-char *testfile = "test\\testfile.mp3";
-char *testfile_bk = "test\\testfile.mp3.bk";
+char *testfile = "test/testfile.mp3";
+char *testfile_bk = "test/testfile.mp3.bk";
 ID3V2_HEADER testfile_header;
 ID3_METAINFO testfile_info;
 
@@ -58,7 +58,7 @@ int test(char *testfile_path, char args[E_FIDS][256], int frames_edited[E_FIDS])
 int assert(const TEST_DATA *expected_data, const TEST_DATA *real_data);
 void read_arg_data(TEST_DATA *expected, const ID3_METAINFO metainfo, const char args[E_FIDS][256], const int frames_edited[E_FIDS]);
 
-int main(int argc, char *argv[]) {
+int main() {
 	char args[E_FIDS][256];
 	memset(args, 0, E_FIDS*256);
 
@@ -108,7 +108,7 @@ int main(int argc, char *argv[]) {
 		{ // TRCK: Track Number
 			strncpy(args[3], "1", 2);
 			frames_edited[3] = 1;
-			char *trck_testfile = "test\\1 testfile.mp3";
+			char *trck_testfile = "test/1 testfile.mp3";
 			fails += test(trck_testfile, args, frames_edited);
 			memset(args, 0, E_FIDS*256);
 			memset(frames_edited, 0, sizeof(int)*E_FIDS);
@@ -135,7 +135,7 @@ int main(int argc, char *argv[]) {
 			frames_edited[1] = 1;
 			frames_edited[2] = 1;
 			frames_edited[3] = 1;
-			char *trck_testfile = "test\\1 testfile.mp3";
+			char *trck_testfile = "test/1 testfile.mp3";
 			fails += test(trck_testfile, args, frames_edited);
 			memset(args, 0, E_FIDS*256);
 			memset(frames_edited, 0, sizeof(int)*E_FIDS);
@@ -199,7 +199,8 @@ int test(char *testfile_path, char args[E_FIDS][256], int frames_edited[E_FIDS])
 
 	
 	f = fopen(testfile_path, "rb");
-	int fail = system(cmd);
+	int fail = 0;
+	fail = system(cmd);
 	if (fail != 0) return fail;
 
 	read_header(&testfile_header, f, testfile_path, 0);
@@ -329,8 +330,8 @@ char *get_cmd_str(char *testfile, const char args[E_FIDS][256]) {
 void cprintf(const char *color, const char *fmt, ...) {
 	va_list args;
 	va_start(args, fmt);
-	printf(color);
+	printf("%s", color);
 	vprintf(fmt, args);
-	printf(RESET);
+	printf("%s", RESET);
 	va_end(args);
 }

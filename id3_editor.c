@@ -153,12 +153,12 @@ void parse_args(int argc, char *argv[],
     if (errflag) exit(1);
 
     // Read filepath argument
-    char *filepath;
+    char *filepath = calloc(strlen(argv[optind])+1, sizeof(char));
     if (optind == argc) {
         printf("Missing path argument.\n");
         exit(1);
     } else {
-        filepath = argv[optind];
+        strncpy(filepath, argv[optind], strlen(argv[optind])+1);
     }
 
     // POSIX Compliant file info retrieval
@@ -268,7 +268,6 @@ void parse_args(int argc, char *argv[],
         }
 
         *path = malloc(sizeof(char *));
-        **path = malloc(strlen(filepath));
         **path = filepath;
     }
 }

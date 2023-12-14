@@ -39,16 +39,17 @@ char t_fids[T_FIDS][5] = {t_fids_arr};
 char s_fids[S_FIDS][5] = {s_fids_arr};
 char fids[E_FIDS][5] = {t_fids_arr , s_fids_arr};
 
-char *testfile = "test/testfile.mp3";
-char *testfile_bk = "test/testfile.mp3.bk";
+#define NUM_FILES 1
+char *testfiles[] = { "test/testfile.mp3" };
+char *testfile_bk;
 ID3V2_HEADER testfile_header;
 ID3_METAINFO testfile_info;
 
 typedef struct test_data {
-	char (*fid)[4];
-	int frame_count;
-	char **data;
-	int *sz;
+	char (*fid)[4]; // frame IDs
+	int frame_count; // number of frames
+	char **data; // frame data
+	int *sz; // frame data sizes
 } TEST_DATA;
 
 void cprintf(const char *color_code, const char *fmt, ...);
@@ -65,26 +66,32 @@ int main() {
 	int frames_edited[E_FIDS];
 	memset(frames_edited, 0, sizeof(int)*E_FIDS);
 
-	FILE *tf = fopen(testfile, "rb");
-	read_header(&testfile_header, tf, testfile, 0);
-	get_ID3_metainfo(&testfile_info, &testfile_header, tf, 0);
-	fclose(tf);
-
-	if (file_copy(testfile, testfile_bk)) {
-		printf("Error reading test file.\n");
-		exit(1);
-	}
-
 	int total_tests = 0, total_fails = 0;
 
-	{ // Single File Unit Tests
+	for (int i = 0; i < NUM_FILES; i++) { 
+		FILE *tf = fopen(testfiles[i], "rb");
+		read_header(&testfile_header, tf, testfiles[i], 0);
+		get_ID3_metainfo(&testfile_info, &testfile_header, tf, 0);
+		fclose(tf);
+
+		testfile_bk = malloc(strlen(testfiles[i]) + 3);
+		strncpy(testfile_bk, testfiles[i], strlen(testfiles[i]) + 1);
+		strncpy(testfile_bk + strlen(testfiles[i]), ".bk", 4);
+		if (file_copy(testfiles[i], testfile_bk)) {
+			printf("Error reading test file.\n");
+			exit(1);
+		}
+
+		// Single File Unit Tests
+
 		int tests = 0, fails = 0;
-		cprintf(PURP, "Single File Unit Tests:\n");
+		cprintf(PURP, "Single File Unit Tests ");
+		printf("(%s):\n", testfiles[i]);
 
 		{ // TPE1: Artist
 			strncpy(args[0], "New Author", 256);
 			frames_edited[0] = 1;
-			fails += test(testfile, args, frames_edited);
+			fails += test(testfiles[i], args, frames_edited);
 			memset(args, 0, E_FIDS*256);
 			memset(frames_edited, 0, sizeof(int)*E_FIDS);
 		}
@@ -92,7 +99,7 @@ int main() {
 		{ // TALB: Album
 			strncpy(args[1], "My Album", 256);
 			frames_edited[1] = 1;
-			fails += test(testfile, args, frames_edited);
+			fails += test(testfiles[i], args, frames_edited);
 			memset(args, 0, E_FIDS*256);
 			memset(frames_edited, 0, sizeof(int)*E_FIDS);
 		}
@@ -100,7 +107,7 @@ int main() {
 		{ // TIT2: Title
 			strncpy(args[2], "My Title", 256);
 			frames_edited[2] = 1;
-			fails += test(testfile, args, frames_edited);
+			fails += test(testfiles[i], args, frames_edited);
 			memset(args, 0, E_FIDS*256);
 			memset(frames_edited, 0, sizeof(int)*E_FIDS);
 		}
@@ -120,6 +127,8 @@ int main() {
 
 		total_tests += tests;
 		total_fails += fails;
+
+		free(testfile_bk);
 	}
 
 	{ // All Arguments Combined Single File Test

@@ -40,8 +40,15 @@ char s_fids[S_FIDS][5] = {s_fids_arr};
 char fids[E_FIDS][5] = {t_fids_arr , s_fids_arr};
 
 #define NUM_FILES 1
-char *testfiles[] = { "test/testfile.mp3" };
+char *testfiles[] = { 
+	// "1.mp3", // Artist
+	// "2.mp3", // Album 
+	// "4.mp3", // Title
+	// "8.mp3", // Track
+	"16.mp3",// All frames present
+};
 char *testfile_bk;
+char *testfolder_path = "test/";
 ID3V2_HEADER testfile_header;
 ID3_METAINFO testfile_info;
 
@@ -55,71 +62,40 @@ typedef struct test_data {
 void cprintf(const char *color_code, const char *fmt, ...);
 int file_copy(const char *src, const char *dst);
 char *get_cmd_str(char *testfile, const char args[E_FIDS][256]);
-int test(char *testfile_path, char args[E_FIDS][256], int frames_edited[E_FIDS]);
-int assert(const TEST_DATA *expected_data, const TEST_DATA *real_data);
 void read_arg_data(TEST_DATA *expected, const ID3_METAINFO metainfo, const char args[E_FIDS][256], const int frames_edited[E_FIDS]);
 
+int single_arg_test(char *testfile_path, int index, char *arg);
+int var_arg_test(char *testfile_path, int n, ...);
+int run_test(char *testfile_path, char args[E_FIDS][256], int frames_edited[E_FIDS]);
+int assert(const TEST_DATA *expected_data, const TEST_DATA *real_data);
+
 int main() {
-	char args[E_FIDS][256];
-	memset(args, 0, E_FIDS*256);
-
-	int frames_edited[E_FIDS];
-	memset(frames_edited, 0, sizeof(int)*E_FIDS);
-
 	int total_tests = 0, total_fails = 0;
 
+	// Single File Unit Tests
 	for (int i = 0; i < NUM_FILES; i++) { 
-		FILE *tf = fopen(testfiles[i], "rb");
-		read_header(&testfile_header, tf, testfiles[i], 0);
-		get_ID3_metainfo(&testfile_info, &testfile_header, tf, 0);
-		fclose(tf);
+		int tests = 0, fails = 0;
+		cprintf(PURP, "Single Argument Single File Tests ");
+		cprintf(YELLOW, "(%s):\n", testfiles[i]);
 
-		testfile_bk = malloc(strlen(testfiles[i]) + 3);
-		strncpy(testfile_bk, testfiles[i], strlen(testfiles[i]) + 1);
-		strncpy(testfile_bk + strlen(testfiles[i]), ".bk", 4);
-		if (file_copy(testfiles[i], testfile_bk)) {
+		char *filepath = malloc(strlen(testfolder_path) + strlen(testfiles[i]) + 1);
+		char testfile_cp[128];
+		strncpy(filepath, testfolder_path, strlen(testfolder_path));
+		strncpy(filepath + strlen(testfolder_path), testfiles[i], strlen(testfiles[i]));
+		strncpy(testfile_cp, testfiles[i], strlen(testfiles[i]));
+
+		testfile_bk = malloc(strlen(filepath) + 3);
+		strncpy(testfile_bk, filepath, strlen(filepath) + 1);
+		strncpy(testfile_bk + strlen(filepath), ".bk", 4);
+		if (file_copy(filepath, testfile_bk)) {
 			printf("Error reading test file.\n");
 			exit(1);
 		}
 
-		// Single File Unit Tests
-
-		int tests = 0, fails = 0;
-		cprintf(PURP, "Single File Unit Tests ");
-		printf("(%s):\n", testfiles[i]);
-
-		{ // TPE1: Artist
-			strncpy(args[0], "New Author", 256);
-			frames_edited[0] = 1;
-			fails += test(testfiles[i], args, frames_edited);
-			memset(args, 0, E_FIDS*256);
-			memset(frames_edited, 0, sizeof(int)*E_FIDS);
-		}
-		
-		{ // TALB: Album
-			strncpy(args[1], "My Album", 256);
-			frames_edited[1] = 1;
-			fails += test(testfiles[i], args, frames_edited);
-			memset(args, 0, E_FIDS*256);
-			memset(frames_edited, 0, sizeof(int)*E_FIDS);
-		}
-		
-		{ // TIT2: Title
-			strncpy(args[2], "My Title", 256);
-			frames_edited[2] = 1;
-			fails += test(testfiles[i], args, frames_edited);
-			memset(args, 0, E_FIDS*256);
-			memset(frames_edited, 0, sizeof(int)*E_FIDS);
-		}
-
-		{ // TRCK: Track Number
-			strncpy(args[3], "1", 2);
-			frames_edited[3] = 1;
-			char *trck_testfile = "test/1 testfile.mp3";
-			fails += test(trck_testfile, args, frames_edited);
-			memset(args, 0, E_FIDS*256);
-			memset(frames_edited, 0, sizeof(int)*E_FIDS);
-		}
+		fails += single_arg_test(filepath, 0, "TEST AUTHOR NAME"); // TPE1: Artist		
+		fails += single_arg_test(filepath, 1, "TEST ALBUM NAME"); // TALB: Album
+		fails += single_arg_test(filepath, 2, "TEST SONG TITLE"); // TIT2: Title
+		fails += single_arg_test(filepath, 3, strtok(testfile_cp, ".")); // TRCK: Track Number
 
 		tests += 4;
 		cprintf(PASS, "\tPasses: %d\n", tests - fails);
@@ -128,27 +104,36 @@ int main() {
 		total_tests += tests;
 		total_fails += fails;
 
+		remove(testfile_bk);
+
 		free(testfile_bk);
+		free(filepath);
 	}
 
-	{ // All Arguments Combined Single File Test
+	// All Arguments Combined Single File Test
+	for (int i = 0; i < NUM_FILES; i++) { 
 		int tests = 0, fails = 0;
-		cprintf(PURP, "All Arguments Combined Single File Test:\n");
+		cprintf(PURP, "All Arguments Combined Single File Test ");
+		cprintf(YELLOW, "(%s):\n", testfiles[i]);
 
-		{
-			strncpy(args[0], "Alhumam J.", 256);
-			strncpy(args[2], "My Title", 256);
-			strncpy(args[1], "My Album", 256);
-			strncpy(args[3], "1", 2);
-			frames_edited[0] = 1;
-			frames_edited[1] = 1;
-			frames_edited[2] = 1;
-			frames_edited[3] = 1;
-			char *trck_testfile = "test/1 testfile.mp3";
-			fails += test(trck_testfile, args, frames_edited);
-			memset(args, 0, E_FIDS*256);
-			memset(frames_edited, 0, sizeof(int)*E_FIDS);
+		char *filepath = malloc(strlen(testfolder_path) + strlen(testfiles[i]) + 1);
+		char testfile_cp[128];
+		strncpy(filepath, testfolder_path, strlen(testfolder_path));
+		strncpy(filepath + strlen(testfolder_path), testfiles[i], strlen(testfiles[i]));
+		strncpy(testfile_cp, testfiles[i], strlen(testfiles[i]));
+
+		testfile_bk = malloc(strlen(filepath) + 3);
+		strncpy(testfile_bk, filepath, strlen(filepath) + 1);
+		strncpy(testfile_bk + strlen(filepath), ".bk", 4);
+		if (file_copy(filepath, testfile_bk)) {
+			printf("Error reading test file.\n");
+			exit(1);
 		}
+
+		char *trck_num = calloc(5 + strlen(testfile_cp) + 1,sizeof(char));
+		strncpy(trck_num, "TRCK>", 6);
+		strncpy(trck_num + strlen("TRCK>"), strtok(testfile_cp, "."), strlen(testfile_cp));
+		fails += var_arg_test(filepath, 4, "TPE1>TEST AUTHOR NAME", "TALB>TEST ALBUM NAME", "TIT2>TEST SONG TITLE", trck_num);
 
 		tests += 1;
 		cprintf(PASS, "\tPasses: %d\n", tests - fails);
@@ -156,6 +141,11 @@ int main() {
 
 		total_tests += tests;
 		total_fails += fails;
+
+		remove(testfile_bk);
+
+		free(testfile_bk);
+		free(filepath);
 	}
 
 	// TODO Test Cases:
@@ -186,10 +176,50 @@ int assert(const TEST_DATA *expected, const TEST_DATA *real) {
 	return 0;
 }
 
-int test(char *testfile_path, char args[E_FIDS][256], int frames_edited[E_FIDS]) {
+int var_arg_test(char *testfile_path, int n, ...) {
+	char args[E_FIDS][256];
+	memset(args, 0, E_FIDS*256);
+
+	int frames_edited[E_FIDS];
+	memset(frames_edited, 0, sizeof(int)*E_FIDS);
+
+	va_list nargs;
+	va_start(nargs, n);
+
+	for (int i = 0; i < n; i++) {
+		const char *varg = va_arg(nargs, const char *);
+		char *arg = malloc(strlen(varg) + 1); 
+		strncpy(arg, varg, strlen(varg) + 1);
+
+		int ind = get_index(fids, E_FIDS, strtok(arg, ">"));
+		strncpy(args[ind], strtok(NULL, ">"), 256);
+		frames_edited[ind] = 1;
+	}
+
+	va_end(nargs);
+	return run_test(testfile_path, args, frames_edited);
+}
+
+int single_arg_test(char *testfile_path, int index, char *arg) {
+	char args[E_FIDS][256];
+	memset(args, 0, E_FIDS*256);
+
+	int frames_edited[E_FIDS];
+	memset(frames_edited, 0, sizeof(int)*E_FIDS);
+
+	strncpy(args[index], arg, 256);
+	frames_edited[index] = 1;
+
+	return run_test(testfile_path, args, frames_edited);
+}
+
+int run_test(char *testfile_path, char args[E_FIDS][256], int frames_edited[E_FIDS]) {
 	// Reset testing file
 	FILE *f = fopen(testfile_path, "rb");
-	file_copy(testfile_bk, testfile_path); 
+	if (file_copy(testfile_bk, testfile_path) == -1) {
+		printf("Failed copy file.\n");
+		exit(1);
+	} 
 
 	char *cmd = get_cmd_str(testfile_path, args);
 
@@ -206,7 +236,6 @@ int test(char *testfile_path, char args[E_FIDS][256], int frames_edited[E_FIDS])
 	read_arg_data(&expected, testfile_info, args, frames_edited);
 	fclose(f);
 
-	
 	f = fopen(testfile_path, "rb");
 	int fail = 0;
 	fail = system(cmd);
@@ -231,6 +260,7 @@ int test(char *testfile_path, char args[E_FIDS][256], int frames_edited[E_FIDS])
 	else cprintf(FAIL, "FAIL");
 	cprintf(BLUE, ": %s\n", cmd + strlen(exec_path) + 1);
 
+	fclose(f);
 	return fail;
 }
 

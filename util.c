@@ -82,5 +82,5 @@ char *get_fid(int i) {
         case 4: return "APIC";
     }
 
-    return "1111";
+    return "\0";
 }

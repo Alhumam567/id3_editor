@@ -28,14 +28,6 @@
 			- Metadata size
 */
 
-#define FAIL "\033[1;31m"
-#define PASS "\033[1;32m"
-#define YELLOW "\033[33m"
-#define BLUE "\033[34m"
-#define PURP "\033[1;35m"
-#define WHITE_BOLD "\033[1m"
-#define RESET "\033[0m"
-
 char t_fids[T_FIDS][5] = {t_fids_arr};
 char s_fids[S_FIDS][5] = {s_fids_arr};
 char fids[E_FIDS][5] = {t_fids_arr , s_fids_arr};
@@ -60,9 +52,7 @@ typedef struct test_data {
 	int *sz; // frame data sizes
 } TEST_DATA;
 
-void cprintf(const char *color_code, const char *fmt, ...);
-int file_copy(const char *src, const char *dst);
-char *get_cmd_str(char *testfile, const char args[E_FIDS][256]);
+char *build_cmd_str(char *testfile, const char args[E_FIDS][256]);
 void read_arg_data(TEST_DATA *expected, const ID3_METAINFO metainfo, const char args[E_FIDS][256], const int frames_edited[E_FIDS]);
 void get_test_data(TEST_DATA *tdata, char *testfile_path);
 void free_test_data(TEST_DATA *tdata);
@@ -79,7 +69,7 @@ int main() {
 	for (int i = 0; i < NUM_FILES; i++) { 
 		int tests = 0, fails = 0;
 
-		cprintf(YELLOW, "Test File: %s:\n", testfiles[i]);
+		cprintf(YELLOW, "Test File: %s\n", testfiles[i]);
 		cprintf(PURP, "\tSingle Argument Single File Tests:\n ");
 
 		char *filepath = malloc(strlen(testfolder_path) + strlen(testfiles[i]) + 1);
@@ -115,7 +105,7 @@ int main() {
 
 		char *trck_num = calloc(5 + strlen(testfile_cp) + 1,sizeof(char));
 		strncpy(trck_num, "TRCK>", 6);
-		strncpy(trck_num + strlen("TRCK>"), strtok(testfile_cp, "."), strlen(testfile_cp));
+		strncpy(trck_num + strlen("TRCK>"), testfile_cp, strlen(testfile_cp));
 		fails += var_arg_test(filepath, 4, "TPE1>TEST AUTHOR NAME", "TALB>TEST ALBUM NAME", "TIT2>TEST SONG TITLE", trck_num);
 
 		tests += 1;
@@ -124,14 +114,14 @@ int main() {
 
 		total_tests += tests;
 		total_fails += fails;
-		
+
 		remove(testfile_bk);
 
 		free(testfile_bk);
 		free(filepath);
 	}
 
-	// TODO Test Cases:
+	// TODO:
 	// 1. Multiple file tests
 	// 		- Single argument tests
 	// 		- Multi  argument tests
@@ -153,8 +143,7 @@ int assert(const TEST_DATA *expected, const TEST_DATA *real) {
 	
 	for (int i = 0; i < expected->frame_count; i++) {
 		// TODO: readonly checks
-		if (expected->sz[i] != real->sz[i] || 
-			memcmp(expected->data[i], real->data[i], real->sz[i])) 
+		if (expected->sz[i] != real->sz[i] || memcmp(expected->data[i], real->data[i], real->sz[i])) 
 			return 1;
 	}
 
@@ -205,14 +194,13 @@ int run_test(char *testfile_path, char args[E_FIDS][256], int frames_edited[E_FI
 		exit(1);
 	} 
 
-	char *cmd = get_cmd_str(testfile_path, args);
+	char *cmd = build_cmd_str(testfile_path, args);
 
 	TEST_DATA expected;
 	get_test_data(&expected, testfile_path);
 	read_arg_data(&expected, testfile_info, args, frames_edited);
 	
-	int fail = 0;
-	fail = system(cmd);
+	int fail = system(cmd);
 	free(cmd);
 	if (fail != 0) return fail;
 
@@ -220,7 +208,6 @@ int run_test(char *testfile_path, char args[E_FIDS][256], int frames_edited[E_FI
 	get_test_data(&real, testfile_path);
 
 	fail = assert(&expected, &real);
-
 	free_test_data(&real);
 	free_test_data(&expected);
 
@@ -313,7 +300,7 @@ void free_test_data(TEST_DATA *tdata) {
 	free(tdata->data);
 }
 
-char *get_cmd_str(char *testfile, const char args[E_FIDS][256]) {
+char *build_cmd_str(char *testfile, const char args[E_FIDS][256]) {
 	char *cmd = calloc((E_FIDS+1)*256, sizeof(char));
 
 	strncat(cmd, exec_path, strlen(exec_path) + 1);
@@ -339,11 +326,3 @@ char *get_cmd_str(char *testfile, const char args[E_FIDS][256]) {
 	return cmd;
 }
 
-void cprintf(const char *color, const char *fmt, ...) {
-	va_list args;
-	va_start(args, fmt);
-	printf("%s", color);
-	vprintf(fmt, args);
-	printf("%s", RESET);
-	va_end(args);
-}

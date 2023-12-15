@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
+
 
 /**
  * Synchsafe int32: Integer type represented in 28 bits instead of typical 32, where the most significant 
@@ -99,4 +101,15 @@ char *get_fid(int i) {
     }
 
     return "\0";
+}
+
+#define RESET "\033[0m"
+
+void cprintf(const char *color, const char *fmt, ...) {
+	va_list args;
+	va_start(args, fmt);
+	printf("%s", color);
+	vprintf(fmt, args);
+	printf("%s", RESET);
+	va_end(args);
 }

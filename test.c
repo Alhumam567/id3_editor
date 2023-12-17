@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <errno.h>
 
 #include "id3.h"
 #include "id3_parse.h"
@@ -32,13 +33,15 @@ char t_fids[T_FIDS][5] = {t_fids_arr};
 char s_fids[S_FIDS][5] = {s_fids_arr};
 char fids[E_FIDS][5] = {t_fids_arr , s_fids_arr};
 
-#define NUM_FILES 1
+#define NUM_FILES 3
 char *testfiles[] = { 
 	// "1.mp3", // Artist
 	// "2.mp3", // Album 
-	// "4.mp3", // Title
+	"4.mp3", // Title
+	"5.mp3", // Title, Artist
+	"7.mp3", // Artist, Album, Title
 	// "8.mp3", // Track
-	"16.mp3",// All frames present
+	// "16.mp3",// All frames present
 };
 char *testfile_bk;
 char *testfolder_path = "test/";
@@ -64,6 +67,7 @@ int assert(const TEST_DATA *expected_data, const TEST_DATA *real_data);
 
 int main() {
 	int total_tests = 0, total_fails = 0;
+	errno = 0;
 
 	// Single File Unit Tests
 	for (int i = 0; i < NUM_FILES; i++) { 
@@ -72,7 +76,7 @@ int main() {
 		cprintf(YELLOW, "Test File: %s\n", testfiles[i]);
 		cprintf(PURP, "\tSingle Argument Single File Tests:\n ");
 
-		char *filepath = malloc(strlen(testfolder_path) + strlen(testfiles[i]) + 1);
+		char *filepath = calloc(strlen(testfolder_path) + strlen(testfiles[i]) + 1, sizeof(char));
 		char testfile_cp[128];
 		strncpy(filepath, testfolder_path, strlen(testfolder_path));
 		strncpy(filepath + strlen(testfolder_path), testfiles[i], strlen(testfiles[i]));
@@ -82,7 +86,7 @@ int main() {
 		strncpy(testfile_bk, filepath, strlen(filepath) + 1);
 		strncpy(testfile_bk + strlen(filepath), ".bk", 4);
 		if (file_copy(filepath, testfile_bk)) {
-			printf("Error reading test file.\n");
+			printf("Error reading test file. %d\n", errno);
 			exit(1);
 		}
 
@@ -114,8 +118,6 @@ int main() {
 
 		total_tests += tests;
 		total_fails += fails;
-
-		remove(testfile_bk);
 
 		free(testfile_bk);
 		free(filepath);

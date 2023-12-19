@@ -33,18 +33,18 @@ char t_fids[T_FIDS][5] = {t_fids_arr};
 char s_fids[S_FIDS][5] = {s_fids_arr};
 char fids[E_FIDS][5] = {t_fids_arr , s_fids_arr};
 
-#define NUM_FILES 3
+#define NUM_FILES 5
 char *testfiles[] = { 
 	// "1.mp3", // Artist
 	// "2.mp3", // Album 
 	"4.mp3", // Title
 	"5.mp3", // Title, Artist
+	"6.mp3", // Title, Album
 	"7.mp3", // Artist, Album, Title
 	// "8.mp3", // Track
-	// "16.mp3",// All frames present
+	"16.mp3",// All frames present
 };
 char *testfile_bk;
-char *testfolder_path = "test/";
 ID3V2_HEADER testfile_header;
 ID3_METAINFO testfile_info;
 
@@ -57,7 +57,7 @@ typedef struct test_data {
 
 char *build_cmd_str(char *testfile, const char args[E_FIDS][256]);
 void read_arg_data(TEST_DATA *expected, const ID3_METAINFO metainfo, const char args[E_FIDS][256], const int frames_edited[E_FIDS]);
-void get_test_data(TEST_DATA *tdata, char *testfile_path);
+void get_file_data(TEST_DATA *tdata, char *testfile_path);
 void free_test_data(TEST_DATA *tdata);
 
 int single_arg_test(char *testfile_path, int index, char *arg);
@@ -67,7 +67,6 @@ int assert(const TEST_DATA *expected_data, const TEST_DATA *real_data);
 
 int main() {
 	int total_tests = 0, total_fails = 0;
-	errno = 0;
 
 	// Single File Unit Tests
 	for (int i = 0; i < NUM_FILES; i++) { 
@@ -81,12 +80,11 @@ int main() {
 		strncpy(filepath, testfolder_path, strlen(testfolder_path));
 		strncpy(filepath + strlen(testfolder_path), testfiles[i], strlen(testfiles[i]));
 		strncpy(testfile_cp, testfiles[i], strlen(testfiles[i]));
-
-		testfile_bk = malloc(strlen(filepath) + 3);
+		testfile_bk = calloc(strlen(filepath) + 4, sizeof(char));
 		strncpy(testfile_bk, filepath, strlen(filepath) + 1);
 		strncpy(testfile_bk + strlen(filepath), ".bk", 4);
 		if (file_copy(filepath, testfile_bk)) {
-			printf("Error reading test file. %d\n", errno);
+			printf("Error reading test file.\n");
 			exit(1);
 		}
 
@@ -107,7 +105,7 @@ int main() {
 		fails = 0;
 		cprintf(PURP, "\tAll Arguments Combined Single File Test:\n ");
 
-		char *trck_num = calloc(5 + strlen(testfile_cp) + 1,sizeof(char));
+		char *trck_num = calloc(5 + strlen(testfile_cp) + 1, sizeof(char));
 		strncpy(trck_num, "TRCK>", 6);
 		strncpy(trck_num + strlen("TRCK>"), testfile_cp, strlen(testfile_cp));
 		fails += var_arg_test(filepath, 4, "TPE1>TEST AUTHOR NAME", "TALB>TEST ALBUM NAME", "TIT2>TEST SONG TITLE", trck_num);
@@ -119,20 +117,19 @@ int main() {
 		total_tests += tests;
 		total_fails += fails;
 
+		remove(testfile_bk);
 		free(testfile_bk);
 		free(filepath);
+		free(trck_num);
 	}
 
 	// TODO:
 	// 1. Multiple file tests
 	// 		- Single argument tests
 	// 		- Multi  argument tests
-	// 2. Overwriting vs appending new frames on single file 
-	// 3. Variable initial frames on multiple files
-	// 4. Multithreaded testing
+	// 2. Multithreaded testing
 
-	printf("\n");
-	cprintf(WHITE_BOLD, "Results\n");
+	cprintf(WHITE_BOLD, "\nResults\n");
 	printf("Total Tests: %d\n", total_tests);
 	cprintf(PASS, "Total Passes: %d\n", total_tests - total_fails);
 	cprintf(FAIL, "Total Fails: %d\n", total_fails);
@@ -154,9 +151,8 @@ int assert(const TEST_DATA *expected, const TEST_DATA *real) {
 
 int var_arg_test(char *testfile_path, int n, ...) {
 	char args[E_FIDS][256];
-	memset(args, 0, E_FIDS*256);
-
 	int frames_edited[E_FIDS];
+	memset(args, 0, E_FIDS*256);
 	memset(frames_edited, 0, sizeof(int)*E_FIDS);
 
 	va_list nargs;
@@ -164,7 +160,7 @@ int var_arg_test(char *testfile_path, int n, ...) {
 
 	for (int i = 0; i < n; i++) {
 		const char *varg = va_arg(nargs, const char *);
-		char *arg = malloc(strlen(varg) + 1); 
+		char *arg = calloc(strlen(varg) + 1, sizeof(char)); 
 		strncpy(arg, varg, strlen(varg) + 1);
 
 		int ind = get_index(fids, E_FIDS, strtok(arg, ">"));
@@ -178,9 +174,8 @@ int var_arg_test(char *testfile_path, int n, ...) {
 
 int single_arg_test(char *testfile_path, int index, char *arg) {
 	char args[E_FIDS][256];
-	memset(args, 0, E_FIDS*256);
-
 	int frames_edited[E_FIDS];
+	memset(args, 0, E_FIDS*256);
 	memset(frames_edited, 0, sizeof(int)*E_FIDS);
 
 	strncpy(args[index], arg, 256);
@@ -199,15 +194,14 @@ int run_test(char *testfile_path, char args[E_FIDS][256], int frames_edited[E_FI
 	char *cmd = build_cmd_str(testfile_path, args);
 
 	TEST_DATA expected;
-	get_test_data(&expected, testfile_path);
+	get_file_data(&expected, testfile_path);
 	read_arg_data(&expected, testfile_info, args, frames_edited);
 	
 	int fail = system(cmd);
-	free(cmd);
 	if (fail != 0) return fail;
 
 	TEST_DATA real;
-	get_test_data(&real, testfile_path);
+	get_file_data(&real, testfile_path);
 
 	fail = assert(&expected, &real);
 	free_test_data(&real);
@@ -217,6 +211,7 @@ int run_test(char *testfile_path, char args[E_FIDS][256], int frames_edited[E_FI
 	if (!fail) cprintf(PASS, "PASS");
 	else cprintf(FAIL, "FAIL");
 	cprintf(BLUE, ": %s\n", cmd + strlen(exec_path) + 1);
+	free(cmd);
 
 	return fail;
 }
@@ -279,7 +274,7 @@ void read_arg_data(TEST_DATA *expected, ID3_METAINFO metainfo, const char args[E
 	}
 }
 
-void get_test_data(TEST_DATA *tdata, char *testfile_path) {
+void get_file_data(TEST_DATA *tdata, char *testfile_path) {
 	FILE *f = fopen(testfile_path, "rb");
 	read_header(&testfile_header, f, testfile_path, 0);
 	get_ID3_metainfo(&testfile_info, &testfile_header, f, 0);

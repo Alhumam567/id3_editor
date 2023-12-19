@@ -258,13 +258,14 @@ ID3_METAINFO *get_ID3_metainfo(ID3_METAINFO *metainfo, ID3V2_HEADER *header, FIL
     // Count FILE *f metadata byte size and number of ID3 frames
     while (sz < metadata_alloc) {
         ID3V2_FRAME_HEADER frame_header;
+        frame_header.fid[0] = '\0';
         if (fread(frame_header.fid, 1, 4, f) != 4) {
             printf("get_ID3_metainfo (1): Error occurred reading file identifier [%d].\n", sz);
             exit(1);    
         }
 
         // End of frame data
-        if (strlen(frame_header.fid) == 0) break;
+        if (frame_header.fid[0] == '\0') break;
 
         if (fread(frame_header.size, 1, 4, f) != 4) {
             printf("Error occurred reading tag size.\n");

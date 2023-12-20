@@ -42,12 +42,12 @@ int main() {
 		for (int j = 0; j < 4; j++) printf(" 0x%x", keys[i][j]);
 		printf(" ]\n");
 	}
-	printf("\nspecialized hash 1:\n");
+	printf("\nspecialized hash 1 (3rd+4th byte - [2nd bit 3rd byte]):\n");
 	for (int i = 0; i < 5; i++) {
 		printf("%s: ", keys[i]);
 		printf("%d \n", (keys[i][2] + keys[i][3] - ((keys[i][2] & 0x2) >> 1)) % buckets);
 	}
-	printf("\nspecialized hash 2:\n");
+	printf("\nspecialized hash 2 (concat 0x2 3rd byte + 0x8 3rd byte + 0x1 2nd byte):\n");
 	for (int i = 0; i < 5; i++) {
 		printf("%s: ", keys[i]);
 		printf("%d \n", (((keys[i][2] & 0b00000010) << 1) + 
@@ -66,19 +66,19 @@ int main() {
 
     * hash family:
     * H_{p,m} = {h_{a,b} : a in Z_p^* and b in Z_p}
+	for (int a=1; a < p; a++) {
+		for (int b=0; b<p; b++) {
+			printf("hash func %d,%d: ", a, b);
+			int *isset = calloc(buckets, sizeof(int));
+			for (int k = 0; k<buckets; k++) {
+				isset[linear_hash(a, b, strtoint(keys[k]))]++;
+			}
+			for (int _i = 0; _i < buckets; _i++) printf("%d ", isset[_i]);
+			free(isset);
+			printf("\n");
+		}
+	}
 	*/
-	// for (int a=1; a < p; a++) {
-	// 	for (int b=0; b<p; b++) {
-	// 		printf("hash func %d,%d: ", a, b);
-	// 		int *isset = calloc(buckets, sizeof(int));
-	// 		for (int k = 0; k<buckets; k++) {
-	// 			isset[linear_hash(a, b, strtoint(keys[k]))]++;
-	// 		}
-	// 		for (int _i = 0; _i < buckets; _i++) printf("%d ", isset[_i]);
-	// 		free(isset);
-	// 		printf("\n");
-	// 	}
-	// }
 	srand(time(NULL));
 	int a = (rand() % (p - 1)) + 1;
 	int b = (rand() % (p));
@@ -92,7 +92,6 @@ int main() {
 		printf("%s: %d\n", keys[i], h);
 	}
 	printf("is perfect: %d\n", no_col);
-
 	// e.g. min perfect hash function for keys (p=65805703, a=46856658, b=669512)
 
     return 0;

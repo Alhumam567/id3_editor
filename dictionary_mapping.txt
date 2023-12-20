@@ -1,28 +1,22 @@
 EDITABLE FIDS DICTIONARY
 
-keys:
+universe of keys:
  "TPE1"
  "TALB"
  "TIT2"
  "TRCK"
  "APIC"
 
-values:
-0
-1
-2
-3
-4
+values are strings passed as args
 
-- static
+- static keys
 - no collisions
 - uses minimal bucket size
-
 => minimal perfect hash function
 
 GPERF: https://www.gnu.org/software/gperf/manual/gperf.html
 
-djb2 hash function (5 buckets):
+djb2 hash function mapping (5 buckets):
     TPE1: 4 (2089581759) [ 0x54 0x50 0x45 0x31 ]
     TALB: 2 (2089565672) [ 0x54 0x41 0x4c 0x42 ]
     TIT2: 2 (2089574632) [ 0x54 0x49 0x54 0x32 ]

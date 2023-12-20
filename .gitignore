@@ -6,4 +6,3 @@ misc/
 .vscode/
 test/
 path.h
-hash.c

@@ -1,0 +1,86 @@
+EDITABLE FIDS DICTIONARY
+
+keys:
+ "TPE1"
+ "TALB"
+ "TIT2"
+ "TRCK"
+ "APIC"
+
+values:
+0
+1
+2
+3
+4
+
+- static
+- no collisions
+- uses minimal bucket size
+
+=> minimal perfect hash function
+
+GPERF: https://www.gnu.org/software/gperf/manual/gperf.html
+
+djb2 hash function (5 buckets):
+    TPE1: 4 (2089581759) [ 0x54 0x50 0x45 0x31 ]
+    TALB: 2 (2089565672) [ 0x54 0x41 0x4c 0x42 ]
+    TIT2: 2 (2089574632) [ 0x54 0x49 0x54 0x32 ]
+    TRCK: 2 (2089583897) [ 0x54 0x52 0x43 0x4b ]
+    APIC: 1 (2088899106) [ 0x41 0x50 0x49 0x43 ]
+
+Analysis:
+    TPE1 = 01010100 01010000 01000101 00110001
+    TALB = 01010100 01000001 01001100 01000010
+    TIT2 = 01010100 01001001 01010100 00110010
+    TRCK = 01010100 01010010 01000011 01001011
+    APIC = 01000001 01010000 01001001 01000011
+
+    Hash 1: 3rd letter, 3 bits
+    TPE1 -> E = 01000101, >> 2 = 010001, & 000111 = 001 = 1
+    TALB -> L = 01001100, >> 2 = 010011, & 000111 = 011 = 3
+    TIT2 -> T = 01010100, >> 2 = 010101, & 000111 = 101 = 5
+    TRCK -> C = 01000011, >> 2 = 010000, & 000111 = 000 = 0
+    APIC -> I = 01001001, >> 2 = 010010, & 000111 = 010 = 2
+
+    Hash 2: 3rd letter, 4 bits
+    TPE1 -> E = 01000101, & 00001111 = 0101 = 5  = 0
+    TALB -> L = 01001100, & 00001111 = 1100 = 12 = 2
+    TIT2 -> T = 01010100, & 00001111 = 0100 = 4  = 4
+    TRCK -> C = 01000011, & 00001111 = 0011 = 3  = 3
+    APIC -> I = 01001001, & 00001111 = 1001 = 9  = 4
+
+    Hash 3: 3rd + 4th letter - 3rd letter 7th bit
+    TPE1 -> E1 -> 01000101 + 00110001 - 0 = 118_10, % 5 = 3 
+    TALB -> LB -> 01001100 + 01000010 - 0 = 142_10, % 5 = 2
+    TIT2 -> T2 -> 01010100 + 00110010 - 0 = 134_10, % 5 = 4
+    TRCK -> CK -> 01000011 + 01001011 - 1 = 141_10, % 5 = 1
+    APIC -> IC -> 01001001 + 01000011 - 0 = 140_10, % 5 = 0
+
+    Hash 4: concat 3rd L 7th B, 3rd L 5th B, 2nd L 8th B
+    3:7 3:5 2:8
+    0   0   0   = 000 = 0
+    0   1   1   = 011 = 3
+    0   0   1   = 001 = 1
+    1   0   0   = 100 = 4
+    0   1   0   = 010 = 2
+
+universal hashing:
+    U = {"TPE1", "TALB", "TIT2", "TRCK", "APIC"}
+    Using polynomial transformation based on number of possible characters, we create the equivalent set of keys as ints: 
+    Ui = {2378532, 3180216, 2444376, 3589068, 3223505}
+
+    Let,
+    n = 5
+    m = # of buckets = 5
+    p = 65805703
+
+    Z_p = {0,1,2,...,65805702}
+    Z_p^* = {1,2,3,...,65805702}
+
+    h_{a,b}(k) = ((a*k + b) mod p) mod m
+
+    hash family:
+    H_{p,m} = {h_{a,b} : a in Z_p^* and b in Z_p}
+
+perfect hashing:

@@ -66,3 +66,10 @@ int direct_address_destroy(DIRECT_HT *ht) {
     return 1;
 }
 
+DIRECT_HT *fidtable_create() {
+    DIRECT_HT *ht = direct_address_create(E_FIDS);
+
+    for (int i = 0; i < E_FIDS; i++)
+        direct_address_insert(ht, fids[i], i);
+}
+

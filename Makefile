@@ -1,14 +1,21 @@
 id3_editor.exe: util.o id3_parse.o file_util.o id3_editor.o 
-	gcc -g id3_editor.o id3_parse.o file_util.o util.o -o id3_editor.exe
+	gcc -Wall -g id3_editor.o id3_parse.o file_util.o util.o -o id3_editor.exe
 
 test.exe: util.o id3_parse.o test.o
-	gcc -g util.o id3_parse.o test.o -o test.exe
+	gcc -Wall -g util.o id3_parse.o test.o -o test.exe
+
+search.exe: id3_hash.o search.o
+	gcc -Wall -g id3_hash.o search.o -o search.exe
 
 %.o: %.c 
 	gcc -g -Wall -c $< -o $@
 
+clean:
+	rm -f *.o *.exe
+
 testclean: 
 	rm -f util.o id3_parse.o test.o
 
-clean:
-	rm -f id3_editor.o id3_parse.o file_util.o util.o test.o id3_editor.exe test.exe
+searchclean:
+	rm -f id3_hash.o search.o
+	

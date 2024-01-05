@@ -4,7 +4,7 @@
 #include <math.h>
 #include <time.h>
 
-#include "id3_hash.c"
+#include "id3_hash.h"
 
 int p = 65805703;
 
@@ -26,6 +26,10 @@ unsigned int strtoint(const char k[5]) {
 	return (k[3] * pow(36,3)) + (k[2] * pow(36,2)) + (k[1] * 36) + k[0];
 }
 
+unsigned int strtoint2(const char k[5]) {
+	return (k[3] << 24) + (k[2] << 16) + (k[1] << 8) + k[0];
+}
+
 int main() {
 	const int n_e = 5, n_all = 83;
 	const char e_fids[5][5] = {"TPE1", "TALB", "TIT2", "TRCK", "APIC"};
@@ -44,7 +48,7 @@ int main() {
 	};  
 	int int_e_fids[n_e], int_all_fids[n_all];
 	for (int i = 0; i < n_e; i++) int_e_fids[i] = strtoint(e_fids[i]);
-	for (int i = 0; i < n_all; i++) int_all_fids[i] = strtoint(all_fids[i]);
+	for (int i = 0; i < n_all; i++) int_all_fids[i] = strtoint2(all_fids[i]);
 
 	printf("============Editable FIDs hash function search============\n\n");
 	int buckets = n_e;
@@ -133,33 +137,44 @@ int main() {
 	buckets = n_all;
 	p = 4761373;
 
-	printf("\nBrute-force search (linear hashing): \n");
-	perf_a = -1;
-	perf_b = -1;
-	num_perf = 0;
-	for (int a=1; a < 1000; a++) {
-		for (int b=0; b < 1000; b++) {
-			int *isset = calloc(buckets, sizeof(int));
-			for (int k = 0; k<buckets; k++) {
-				isset[linear_hash(a, b, int_e_fids[k]) % buckets]++;
-			}
-			int perf = 1;
-			for (int i = 0; i < buckets; i++) {
-				if (isset[i] > 1) { 
-					perf = 0;	
-					break;
+	int set[83+120];
+
+	printf("\nBrute-force search for PHF (linear hashing): \n");
+	for (int s = 234; s<250; s++) {
+		printf("%d-%d: ", s*1000, (s+1)*1000);
+
+		int min_perf = 0;
+		int min_collisions = INT_MAX;
+		perf_a = -1;
+		perf_b = -1;
+		num_perf = 0;
+		for (int a=s*1000 + 1; a < (s+1)*1000; a++) {
+			for (int b=s*1000; b < (s+1)*1000; b++) {
+				for (buckets = n_all; buckets < n_all + 40; buckets++) {
+					int collisions = 0;
+
+					for (int k = 0; k<n_all; k++) {
+						unsigned int h = linear_hash(a, b, int_all_fids[k]) % buckets;
+						if (set[h]++) collisions++;
+					}
+
+					if (!collisions) {
+						num_perf++;
+						perf_a = a;
+						perf_b = b;
+						min_perf = buckets == n_all;
+					} else if (min_collisions > collisions) min_collisions = collisions;
+					
+					for (int _i = 0; _i < 183; _i++) set[_i] = 0;
 				}
 			}
-			if (perf) {
-				num_perf++;
-				perf_a = a;
-				perf_b = b;
-			}
-			free(isset);
 		}
+		printf("number of perfect hash functions found: %d ", num_perf);
+		if (num_perf > 0) printf("(e.g. perfect hashing found (minimal=%d): a=%d, b=%d, p=%d)\n", min_perf, perf_a, perf_b, p);
+		else printf("(least collisions: %d)\n", min_collisions);
 	}
-	printf("number of perfect hash functions found: %d\n", num_perf);
-	if (num_perf > 0) printf("e.g. perfect hashing found: a=%d, b=%d, p=%d\n\n", perf_a, perf_b, p);
+	
+	buckets = n_all;
 
 	//	unsigned long hash;
 	// for (hash = 0; hash < p; hash++) {
@@ -187,14 +202,14 @@ int main() {
 	int *isset = calloc(MAX_HASH_VALUE+1, sizeof(int));
 	int no_col = 1, max_h = 0;
 	for (int k = 0; k<buckets; k++) {
-		int h = hash(all_fids[k], 4);
-		printf("%s: %d\n", all_fids[k], h);
+		unsigned int h = hash(all_fids[k], 4);
+		// printf("%s: %d\n", all_fids[k], h);
 		if (isset[h]) no_col = 0;
 		isset[h]++;
 		if (max_h < h) max_h = h;
 	}
 	printf("is perfect: %d\n", no_col);
-	printf("is minimal: %d (%d)\n", max_h + 1 == n_all, max_h + 1);
+	printf("is minimal: %d (bucket_size=%d)\n", max_h + 1 == n_all, max_h + 1);
 	free(isset);
 
     return 0;

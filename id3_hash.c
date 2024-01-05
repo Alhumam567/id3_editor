@@ -1,5 +1,5 @@
 /* C code produced by gperf version 3.1 */
-/* Command-line: gperf --delimiters=, -L C -m 10000 --output-file=id3_hash.c id3_keys.txt  */
+/* Command-line: gperf --includes --delimiters=, -L C -m 10000 --output-file=id3_hash.c id3_keys.txt  */
 /* Computed positions: -k'1-4' */
 
 #if !((' ' == 32) && ('!' == 33) && ('"' == 34) && ('#' == 35) \
@@ -29,37 +29,31 @@
 error "gperf generated tables don't work with this execution character set. Please report a bug to <bug-gperf@gnu.org>."
 #endif
 
+#include <string.h>
 
-#define TOTAL_KEYWORDS 84
-#define MIN_WORD_LENGTH 1
+#define TOTAL_KEYWORDS 83
+#define MIN_WORD_LENGTH 4
 #define MAX_WORD_LENGTH 5
-#define MIN_HASH_VALUE 1
+#define MIN_HASH_VALUE 21
 #define MAX_HASH_VALUE 129
-/* maximum key range = 129, duplicates = 0 */
+/* maximum key range = 109, duplicates = 0 */
 
-#ifdef __GNUC__
-__inline
-#else
-#ifdef __cplusplus
-inline
-#endif
-#endif
-static unsigned int
+unsigned int
 hash (str, len)
-     register const char *str;
-     register size_t len;
+     const char *str;
+     size_t len;
 {
-  static unsigned char asso_values[] =
+  unsigned char asso_values[] =
     {
       130, 130, 130, 130, 130, 130, 130, 130, 130, 130,
-      130, 130, 130,   0, 130, 130, 130, 130, 130, 130,
       130, 130, 130, 130, 130, 130, 130, 130, 130, 130,
       130, 130, 130, 130, 130, 130, 130, 130, 130, 130,
       130, 130, 130, 130, 130, 130, 130, 130, 130, 130,
-       40,  14,  26,  43, 130, 130, 130, 130, 130, 130,
-      130, 130, 130, 130, 130,  28,  44,   9,   3,   8,
-       41,  33,  35,  46,  69,  18,  18,   6,  23,   1,
-        2,  62,   4,   0,  14,  29,  35,  13,  23,  13,
+      130, 130, 130, 130, 130, 130, 130, 130, 130, 130,
+       43,  14,  35,  46, 130, 130, 130, 130, 130, 130,
+      130, 130, 130, 130, 130,  28,  35,   9,   3,   8,
+       41,  33,  21,  46,  59,  12,  18,   6,  23,   1,
+        2,  49,   4,   0,  14,  29,  49,  13,  30,  13,
        49, 130, 130, 130, 130, 130, 130, 130, 130, 130,
       130, 130, 130, 130, 130, 130, 130, 130, 130, 130,
       130, 130, 130, 130, 130, 130, 130, 130, 130, 130,
@@ -78,38 +72,19 @@ hash (str, len)
       130, 130, 130, 130, 130, 130, 130, 130, 130, 130,
       130, 130, 130, 130, 130, 130, 130
     };
-  register unsigned int hval = len;
-
-  switch (hval)
-    {
-      default:
-        hval += asso_values[(unsigned char)str[3]+1];
-      /*FALLTHROUGH*/
-      case 3:
-        hval += asso_values[(unsigned char)str[2]];
-      /*FALLTHROUGH*/
-      case 2:
-        hval += asso_values[(unsigned char)str[1]];
-      /*FALLTHROUGH*/
-      case 1:
-        hval += asso_values[(unsigned char)str[0]];
-        break;
-    }
-  return hval;
+  return len + asso_values[(unsigned char)str[3]+1] + asso_values[(unsigned char)str[2]] + asso_values[(unsigned char)str[1]] + asso_values[(unsigned char)str[0]];
 }
 
 const char *
 in_word_set (str, len)
-     register const char *str;
-     register size_t len;
+     const char *str;
+     size_t len;
 {
-  static const char * wordlist[] =
+  const char * wordlist[] =
     {
-      "",
-      "\015",
       "", "", "", "", "", "", "", "", "",
       "", "", "", "", "", "", "", "", "",
-      "",
+      "", "", "",
       "COMR\015",
       "POSS\015",
       "TDOR\015",
@@ -144,68 +119,68 @@ in_word_set (str, len)
       "TCOM\015",
       "TENC\015",
       "TOAL\015",
-      "TPE3\015",
+      "TSOA\015",
       "GEOB\015",
-      "RVRB\015",
+      "TDTG\015",
       "WPUB\015",
       "TPUB\015",
       "TSSE\015",
       "WOAS\015",
       "TOFN\015",
       "TOPE\015",
-      "TSOA\015",
+      "TPE3\015",
       "SYLT\015",
       "TLAN\015",
       "AENC\015",
       "PCNT\015",
-      "TPE1\015",
+      "TSOP\015",
       "PRIV\015",
-      "TDTG\015",
-      "TPE4\015",
+      "RVRB\015",
+      "TPE1\015",
       "TIPL\015",
       "TALB\015",
-      "",
+      "TPE4\015",
       "MLLT\015",
-      "WXXX\015",
-      "TXXX\015",
-      "TEXT\015",
+      "WCOP\015",
+      "TCOP\015",
+      "TBPM\015",
       "WOAF\015",
       "USLT\015",
-      "TSOP\015",
+      "MCDI\015",
       "OWNE\015",
       "APIC\015",
       "SIGN\015",
-      "RVA2\015",
+      "TEXT\015",
       "TOLY\015",
-      "TBPM\015",
-      "TDLY\015",
-      "WCOP\015",
-      "TCOP\015",
-      "MCDI\015",
-      "TIT2\015",
       "TKEY\015",
+      "TDLY\015",
+      "WXXX",
+      "",
+      "TXXX\015",
+      "TIT2\015",
+      "ASPI\015",
       "",
       "GRID\015",
       "WPAY\015",
-      "", "", "", "", "", "",
-      "ASPI\015",
-      "TIT3\015",
-      "",
+      "", "",
+      "RVA2\015",
+      "", "", "", "",
+      "EQU2\015",
+      "RBUF\015",
       "TFLT\015",
       "", "",
       "LINK\015",
-      "", "", "", "",
-      "RBUF\015",
-      "", "",
-      "EQU2\015",
+      "", "", "",
+      "TIT3\015",
+      "", "", "", "", "", "", "",
       "TIT1\015",
-      "", "", "", "", "", "", "", "", "",
+      "", "", "", "", "", "",
       "UFID\015"
     };
 
   if (len <= MAX_WORD_LENGTH && len >= MIN_WORD_LENGTH)
     {
-      register unsigned int key = hash (str, len);
+      unsigned int key = hash (str, len);
 
       if (key <= MAX_HASH_VALUE)
         {

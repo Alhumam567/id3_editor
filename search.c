@@ -81,30 +81,37 @@ int main() {
 	}
 	printf("\nBrute-force search (linear hashing): \n");
 	int perf_a = -1, perf_b = -1, num_perf = 0;
+	char perf_order[5][5] = { { 0 } };
 	for (int a=1; a < 200; a++) {
 		for (int b=0; b < 200; b++) {
 			// printf("hash func %d,%d: ", a, b);
 			int *isset = calloc(buckets, sizeof(int));
-			for (int k = 0; k<buckets; k++) {
-				isset[linear_hash(a, b, int_e_fids[k]) % buckets]++;
-			}
 			int perf = 1;
-			for (int i = 0; i < buckets; i++) {
-				if (isset[i] > 1) { 
-					perf = 0;	
+			char order[5][5] = { { 0 } };
+			for (int k = 0; k<buckets; k++) {
+				unsigned int h = linear_hash(a, b, int_e_fids[k]) % buckets;
+				if (isset[h]++ > 1) { 
+					perf = 0;
 					break;
-				}
+				};
+				strncpy(order[h], e_fids[k], 5);
 			}
+			
 			if (perf) {
 				num_perf++;
 				perf_a = a;
 				perf_b = b;
+				for (int _i = 0; _i < n_e; _i++) strncpy(perf_order[_i], order[_i], 5);
 			}
 			free(isset);
 		}
 	}
 	printf("number of perfect hash functions found: %d\n", num_perf);
-	if (num_perf > 0) printf("e.g. perfect hashing found: a=%d, b=%d, p=%d\n\n", perf_a, perf_b, p);
+	if (num_perf > 0) {
+		printf("e.g. perfect hashing found: a=%d, b=%d, p=%d, order=[", perf_a, perf_b, p);
+		for (int _i = 0; _i < n_e; _i++) printf("%s, ", perf_order[_i]);
+		printf("]\n\n");
+	}
 
 	/* UNIVERSAL HASHING
 	* m = n = # of buckets = 5

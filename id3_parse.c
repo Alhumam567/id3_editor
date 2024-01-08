@@ -4,6 +4,7 @@
 
 #include "id3.h"
 #include "util.h"
+#include "hashtable.h"
 
 /**
  * @brief Reads ID3 header data of a file. File pointer must be pointing to the start
@@ -15,7 +16,7 @@
  * @param verbose   - Boolean to print header data to stdout
  * @return ID3V2_HEADER* - returns header struct pointer <header>
  */
-ID3V2_HEADER *read_header(ID3V2_HEADER *header, FILE *f, char *filename, int verbose) {
+ID3V2_HEADER *read_header(ID3V2_HEADER *header, FILE *f, const char *filename, int verbose) {
     if (fread(header->fid, 1, 3, f) != 3) {
         printf("read_header: Error occurred reading file identifier.\n");
         exit(1);
@@ -83,9 +84,11 @@ ID3V2_FRAME_HEADER *read_frame_header(ID3V2_FRAME_HEADER *h, FILE *f) {
 }
 
 
-int read_data(const ID3_METAINFO metainfo, char **data, int *sizes, FILE *f) {
+int read_data(const ID3_METAINFO metainfo, DIRECT_HT *data, DIRECT_HT *sizes, FILE *f) {
     fseek(f, metainfo.frame_pos, SEEK_SET);
     
+    int *size;
+    char *d;
     for (int i = 0; i < metainfo.frame_count; i++) {
         ID3V2_FRAME_HEADER frame_header;
         read_frame_header(&frame_header, f);
@@ -93,14 +96,17 @@ int read_data(const ID3_METAINFO metainfo, char **data, int *sizes, FILE *f) {
         int readonly = 0;
         parse_frame_header_flags(frame_header.flags, &readonly, f);
 
-        sizes[i] = synchsafeint32ToInt(frame_header.size);
-        data[i] = calloc(sizes[i], sizeof(char));
-        int r = fread(data[i], sizes[i], 1, f);
-        
+        size = calloc(1, sizeof(int));
+        *size = synchsafeint32ToInt(frame_header.size);
+        d = calloc(*size, sizeof(char));
+        int r = fread(d, *size, 1, f);
         if (r == 0){
             printf("Error occurred reading frame data.\n");
             return 1;
         }
+
+        direct_address_insert(sizes, frame_header.fid, size);
+        direct_address_insert(data, frame_header.fid, d);
     }
 
     return 0;

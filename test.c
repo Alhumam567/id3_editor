@@ -8,6 +8,7 @@
 #include "id3_parse.h"
 #include "util.h"
 #include "path.h"
+#include "hashtable.h"
 
 /*
 	Class of tests:
@@ -42,27 +43,25 @@ char *testfiles[] = {
 	"6.mp3", // Title, Album
 	"7.mp3", // Artist, Album, Title
 	// "8.mp3", // Track
-	"16.mp3",// All frames present
+	"15.mp3",// All frames present
 };
 char *testfile_bk;
 ID3V2_HEADER testfile_header;
 ID3_METAINFO testfile_info;
 
 typedef struct test_data {
-	char (*fid)[4]; // frame IDs
-	int frame_count; // number of frames
-	char **data; // frame data
-	int *sz; // frame data sizes
+	DIRECT_HT *data;
+	DIRECT_HT *data_sz;
 } TEST_DATA;
 
-char *build_cmd_str(char *testfile, const char args[E_FIDS][256]);
-void read_arg_data(TEST_DATA *expected, const ID3_METAINFO metainfo, const char args[E_FIDS][256], const int frames_edited[E_FIDS]);
-void get_file_data(TEST_DATA *tdata, char *testfile_path);
+char *build_cmd_str(const char *testfile, const DIRECT_HT *args);
+void read_arg_data(TEST_DATA *expected, const ID3_METAINFO metainfo, const DIRECT_HT *args);
+void get_file_data(TEST_DATA *tdata, const char *testfile_path);
 void free_test_data(TEST_DATA *tdata);
 
-int single_arg_test(char *testfile_path, int index, char *arg);
-int var_arg_test(char *testfile_path, int n, ...);
-int run_test(char *testfile_path, char args[E_FIDS][256], int frames_edited[E_FIDS]);
+int single_arg_test(const char *testfile_path, const char key[4], char *arg);
+int var_arg_test(const char *testfile_path, const int n, ...);
+int run_test(const char *testfile_path, const DIRECT_HT *args);
 int assert(const TEST_DATA *expected_data, const TEST_DATA *real_data);
 
 int main() {
@@ -76,7 +75,7 @@ int main() {
 		cprintf(PURP, "\tSingle Argument Single File Tests:\n ");
 
 		char *filepath = calloc(strlen(testfolder_path) + strlen(testfiles[i]) + 1, sizeof(char));
-		char testfile_cp[128];
+		char testfile_cp[128] = { 0 };
 		strncpy(filepath, testfolder_path, strlen(testfolder_path));
 		strncpy(filepath + strlen(testfolder_path), testfiles[i], strlen(testfiles[i]));
 		strncpy(testfile_cp, testfiles[i], strlen(testfiles[i]));
@@ -88,15 +87,14 @@ int main() {
 			exit(1);
 		}
 
-		fails += single_arg_test(filepath, 0, "TEST AUTHOR NAME"); // TPE1: Artist		
-		fails += single_arg_test(filepath, 1, "TEST ALBUM NAME"); // TALB: Album
-		fails += single_arg_test(filepath, 2, "TEST SONG TITLE"); // TIT2: Title
-		fails += single_arg_test(filepath, 3, strtok(testfile_cp, ".")); // TRCK: Track Number
+		fails += single_arg_test(filepath, "TPE1", "TEST AUTHOR NAME"); // TPE1: Artist		
+		fails += single_arg_test(filepath, "TALB", "TEST ALBUM NAME"); // TALB: Album
+		fails += single_arg_test(filepath, "TIT2", "TEST SONG TITLE"); // TIT2: Title
+		fails += single_arg_test(filepath, "TRCK", strtok(testfile_cp, ".")); // TRCK: Track Number
 
 		tests += 4;
 		cprintf(PASS, "\t\tPasses: %d\n", tests - fails);
 		cprintf(FAIL, "\t\tFails: %d\n", fails);
-
 		total_tests += tests;
 		total_fails += fails;
 
@@ -107,13 +105,13 @@ int main() {
 
 		char *trck_num = calloc(5 + strlen(testfile_cp) + 1, sizeof(char));
 		strncpy(trck_num, "TRCK>", 6);
-		strncpy(trck_num + strlen("TRCK>"), testfile_cp, strlen(testfile_cp));
+		strncat(trck_num, testfile_cp, strlen(testfile_cp));
+
 		fails += var_arg_test(filepath, 4, "TPE1>TEST AUTHOR NAME", "TALB>TEST ALBUM NAME", "TIT2>TEST SONG TITLE", trck_num);
 
 		tests += 1;
 		cprintf(PASS, "\t\tPasses: %d\n", tests - fails);
 		cprintf(FAIL, "\t\tFails: %d\n", fails);
-
 		total_tests += tests;
 		total_fails += fails;
 
@@ -138,23 +136,26 @@ int main() {
 }
 
 int assert(const TEST_DATA *expected, const TEST_DATA *real) {
-	if (expected->frame_count != real->frame_count) return 1;
-	
-	for (int i = 0; i < expected->frame_count; i++) {
+	if (expected->data->sz != real->data->sz) return 1; // identical number of frames
+
+	DIRECT_HT *exp_data = expected->data;
+	DIRECT_HT *real_data = real->data; 
+	DIRECT_HT *exp_sizes = expected->data_sz;
+	DIRECT_HT *real_sizes = real->data_sz; 
+
+	for (int i = 0; i < expected->data->sz; i++) {
 		// TODO: readonly checks
-		if (expected->sz[i] != real->sz[i] || memcmp(expected->data[i], real->data[i], real->sz[i])) 
+		if (exp_sizes->entries[i] != NULL && 
+			(exp_sizes->entries[i]->val != real_sizes->entries[i]->val || 
+			 memcmp(exp_data->entries[i]->val, real_data->entries[i]->val, *((int *) real_sizes->entries[i]->val))))
 			return 1;
 	}
 
 	return 0;
 }
 
-int var_arg_test(char *testfile_path, int n, ...) {
-	char args[E_FIDS][256];
-	int frames_edited[E_FIDS];
-	memset(args, 0, E_FIDS*256);
-	memset(frames_edited, 0, sizeof(int)*E_FIDS);
-
+int var_arg_test(const char *testfile_path, int n, ...) {
+	DIRECT_HT *args = direct_address_create(E_FIDS, &e_fids_hash);
 	va_list nargs;
 	va_start(nargs, n);
 
@@ -162,29 +163,34 @@ int var_arg_test(char *testfile_path, int n, ...) {
 		const char *varg = va_arg(nargs, const char *);
 		char *arg = calloc(strlen(varg) + 1, sizeof(char)); 
 		strncpy(arg, varg, strlen(varg) + 1);
+		int arg_len = strlen(arg) - 5;
 
-		int ind = get_index(fids, E_FIDS, strtok(arg, ">"));
-		strncpy(args[ind], strtok(NULL, ">"), 256);
-		frames_edited[ind] = 1;
+		char fid[4] = { 0 };
+		strncpy(fid, strtok(arg, ">"), 4);
+		char *fid_arg = calloc(arg_len + 1, sizeof(char));
+		strncpy(fid_arg, strtok(NULL, ">"), arg_len + 1);
+
+		direct_address_insert(args, fid, fid_arg);
+		free(arg);
 	}
-
 	va_end(nargs);
-	return run_test(testfile_path, args, frames_edited);
+
+	int c = run_test(testfile_path, args);
+	free(args);
+	return c;
 }
 
-int single_arg_test(char *testfile_path, int index, char *arg) {
-	char args[E_FIDS][256];
-	int frames_edited[E_FIDS];
-	memset(args, 0, E_FIDS*256);
-	memset(frames_edited, 0, sizeof(int)*E_FIDS);
+int single_arg_test(const char *testfile_path, const char key[4], char *arg) {
+	DIRECT_HT *args = direct_address_create(E_FIDS, e_fids_hash);
 
-	strncpy(args[index], arg, 256);
-	frames_edited[index] = 1;
+	direct_address_insert(args, key, arg);
 
-	return run_test(testfile_path, args, frames_edited);
+	int c = run_test(testfile_path, args);
+	free(args);
+	return c;
 }
 
-int run_test(char *testfile_path, char args[E_FIDS][256], int frames_edited[E_FIDS]) {
+int run_test(const char *testfile_path, const DIRECT_HT *args) {
 	// Reset testing file
 	if (file_copy(testfile_bk, testfile_path) == -1) {
 		printf("Failed copy file.\n");
@@ -195,7 +201,7 @@ int run_test(char *testfile_path, char args[E_FIDS][256], int frames_edited[E_FI
 
 	TEST_DATA expected;
 	get_file_data(&expected, testfile_path);
-	read_arg_data(&expected, testfile_info, args, frames_edited);
+	read_arg_data(&expected, testfile_info, args);
 	
 	int fail = system(cmd);
 	if (fail != 0) return fail;
@@ -216,103 +222,58 @@ int run_test(char *testfile_path, char args[E_FIDS][256], int frames_edited[E_FI
 	return fail;
 }
 
-void read_arg_data(TEST_DATA *expected, ID3_METAINFO metainfo, const char args[E_FIDS][256], const int frames_edited[E_FIDS]) {
-	int frames_edited_cp[E_FIDS];
-	memcpy(frames_edited_cp, frames_edited, E_FIDS * sizeof(int));
+void read_arg_data(TEST_DATA *expected, const ID3_METAINFO metainfo, const DIRECT_HT *args) {
+	DIRECT_HT *exp_data = expected->data;
+	DIRECT_HT *exp_sz = expected->data_sz;
+	
+	for (int i = 0; i < args->buckets; i++) {
+		if (args->entries[i] == NULL) continue;
 
-	for (int i = 0; i < expected->frame_count; i ++) {
-		int id = get_index(fids, E_FIDS, expected->fid[i]);
+		char key[4];
+		strncpy(key, e_fids_reverse_lookup[i], 4);
 
-		if (id != -1 && frames_edited_cp[id] == 1) {
-			expected->sz[i] = sizeof_frame_data(expected->fid[i], args[id]);
-			free(expected->data[i]);
-			expected->data[i] = calloc(expected->sz[i], sizeof(char));
-            memcpy(expected->data[i], get_frame_data(expected->fid[i], args[id]), expected->sz[i]);
-
-			frames_edited_cp[id] = 0;
-		}
-	}
-
-	int additional_frames = 0;
-	for (int i = 0; i < E_FIDS; i ++) if (frames_edited_cp[i]) additional_frames++;
-
-	if (additional_frames > 0) {
-		int total_frame_count = expected->frame_count + additional_frames;
-
-		char (*_fid)[4] = calloc(total_frame_count, 4);
-		char **_data = calloc(total_frame_count, sizeof(char *));
-		int *_sz = calloc(total_frame_count, sizeof(int));
-
-		memcpy(_fid, expected->fid, expected->frame_count * 4);
-		for (int i = 0; i < expected->frame_count; i ++) {
-			_data[i] = calloc(expected->sz[i], sizeof(char));
-			_sz[i] = expected->sz[i];
-			memcpy(_data[i], expected->data[i], expected->sz[i]);
-		}	
-		
-		free(expected->data);
-		free(expected->sz);
-		free(expected->fid);
-
-		int ind = expected->frame_count;
-			
-		for (int i = 0; i < E_FIDS; i ++) { 
-			if (frames_edited_cp[i]) {
-				_sz[ind] = sizeof_frame_data(get_fid(i), args[i]);
-				_data[ind] = calloc(_sz[ind], sizeof(char));
-            	memcpy(_data[ind], get_frame_data(get_fid(i), args[i]), _sz[ind]);
-
-				ind++;
-				frames_edited_cp[i] = 0;
-			}
-		}
-
-		expected->data = _data;
-		expected->sz = _sz;
-		expected->fid = _fid;
-		expected->frame_count = total_frame_count;
+		int *arg_sz = calloc(1, sizeof(int));
+		*arg_sz = sizeof_frame_data(key, args->entries[i]->val);
+		char *arg_data = calloc(*arg_sz, sizeof(char));
+		strncpy(arg_data, get_frame_data(key, args->entries[i]->val), *arg_sz);
+		direct_address_insert(exp_sz, key, arg_sz);
+		direct_address_insert(exp_data, key, arg_data);
 	}
 }
 
-void get_file_data(TEST_DATA *tdata, char *testfile_path) {
+void get_file_data(TEST_DATA *tdata, const char *testfile_path) {
 	FILE *f = fopen(testfile_path, "rb");
 	read_header(&testfile_header, f, testfile_path, 0);
 	get_ID3_metainfo(&testfile_info, &testfile_header, f, 0);
-
-	tdata->data = calloc(testfile_info.frame_count, sizeof(char *));
-    tdata->sz = calloc(testfile_info.frame_count, sizeof(int));
-	tdata->fid = calloc(testfile_info.frame_count, sizeof(char [4]));
-	tdata->frame_count = testfile_info.frame_count;
-	read_data(testfile_info, tdata->data, tdata->sz, f);
-	memcpy(tdata->fid, testfile_info.fids, testfile_info.frame_count * 4);
+	
+	tdata->data = direct_address_create(MAX_HASH_VALUE, &all_fids_hash);
+	tdata->data_sz = direct_address_create(MAX_HASH_VALUE, &all_fids_hash);
+	read_data(testfile_info, tdata->data, tdata->data_sz, f);
 	
 	fclose(f);
 }
 
 void free_test_data(TEST_DATA *tdata) {
-	free(tdata->fid);
-	free(tdata->sz);
-
-	for (int i = 0; i < tdata->frame_count; i++) free(tdata->data[i]);
-	free(tdata->data);
+	direct_address_destroy(tdata->data);
+	direct_address_destroy(tdata->data_sz);
 }
 
-char *build_cmd_str(char *testfile, const char args[E_FIDS][256]) {
+char *build_cmd_str(const char *testfile, const DIRECT_HT *args) {
 	char *cmd = calloc((E_FIDS+1)*256, sizeof(char));
 
 	strncat(cmd, exec_path, strlen(exec_path) + 1);
 	strncat(cmd, " ", 2);
 	
-	char opts[E_FIDS][5] = {"-a ", "-b ", "-t ", "-n ", "-p "};
+	char opts[E_FIDS][5] = {"-b ", "-t ", "-p ", "-n ", "-a "};
 	for (int i = 0; i < E_FIDS; i++) {
-		if (args[i][0] == '\0') continue;
+		if (args->entries[i] == NULL) continue;
 
 		strncat(cmd, opts[i], 4);
 
 		if (strncmp(opts[i], "-n ", 3) == 0) continue;
 
 		strncat(cmd, "\"", 2);
-		strncat(cmd, args[i], strlen(args[i])+1);
+		strncat(cmd, args->entries[i]->val, strlen(args->entries[i]->val)+1);
 		strncat(cmd, "\" ", 3);
 	}
 

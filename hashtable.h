@@ -31,7 +31,9 @@ extern int direct_address_delete(DIRECT_HT *ht, HT_ENTRY *entry);
 
 extern HT_ENTRY *direct_address_search(const DIRECT_HT *ht, const char key[4]);
 
-unsigned int all_fids_hash(const char k[4]);
-unsigned int e_fids_hash(const char k[4]);
+extern int in_key_set(const DIRECT_HT *ht, const char str[4]);
 
-#endif  
+extern unsigned int all_fids_hash(const char k[4]);
+extern unsigned int e_fids_hash(const char k[4]);
+
+#endif

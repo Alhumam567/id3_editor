@@ -147,7 +147,7 @@ int main() {
 	int set[83+120];
 
 	printf("\nBrute-force search for PHF (linear hashing): \n");
-	for (int s = 234; s<250; s++) {
+	for (int s = 234; s<234; s++) {
 		printf("%d-%d: ", s*1000, (s+1)*1000);
 
 		int min_perf = 0;

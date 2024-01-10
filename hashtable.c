@@ -37,7 +37,6 @@
 #include "id3_hash.h"
 
 const char e_fids_reverse_lookup[E_FIDS][5] = { "TALB", "TIT2", "APIC", "TRCK", "TPE1" };
-extern const char *all_fids_reverse_lookup[5];
 
 unsigned int linear_hash(const int a, const int b, const int p, const unsigned int k) {
 	return (a*k + b) % p;
@@ -75,6 +74,7 @@ int direct_address_delete(DIRECT_HT *ht, HT_ENTRY *entry) {
     if (ht->entries[ht->hash_func(entry->key) % ht->buckets] == NULL) return 0;
 
     ht->entries[ht->hash_func(entry->key) % ht->buckets] = NULL;
+    free(entry->val);
     free(entry);
     ht->sz--;
 
@@ -87,8 +87,7 @@ HT_ENTRY *direct_address_search(const DIRECT_HT *ht, const char key[4]) {
 
 int in_key_set(const DIRECT_HT *ht, const char str[4]) {
     int i = ht->hash_func(str) % ht->buckets;
-    if (ht->buckets == E_FIDS) return !strncmp(e_fids_reverse_lookup[i], str, 4);
-    return !strncmp(all_fids_reverse_lookup[i], str, 4);
+    return ht->entries[i] != NULL && !strncmp(ht->entries[i]->key, str, 4);
 }
 
 DIRECT_HT *direct_address_create(const int buckets, unsigned int (*hash_func)(const char key[4])) {

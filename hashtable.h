@@ -1,7 +1,7 @@
 #ifndef DA_HT
 #define DA_HT
 
-#include "id3.h"
+#include "id3_hash.h"
 
 typedef struct entry {
     char key[4];
@@ -19,7 +19,7 @@ typedef struct direct_ht {
 
 #define MAX_HASH_VALUE 129
 
-extern const char e_fids_reverse_lookup[E_FIDS][5];
+extern const char e_fids_reverse_lookup[][5];
 
 extern DIRECT_HT *direct_address_create(const int buckets, unsigned int (*hash_func)(const char key[4]));
 

@@ -15,6 +15,6 @@ extern void print_data(FILE *f, ID3_METAINFO metainfo);
 
 extern ID3_METAINFO *get_ID3_metainfo(ID3_METAINFO *metainfo, ID3V2_HEADER *header, FILE *f, int verbose);
 
-extern int sizeof_frame_data(char fid[4], const char arg_data[256]);
+extern int sizeof_frame_data(char fid[4], const char *arg_data);
 
-extern char *get_frame_data(char fid[4], const char arg_data[256]);
+extern char *get_frame_data(char fid[4], const char *arg_data);

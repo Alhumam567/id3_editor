@@ -10,10 +10,11 @@
 #include "id3_parse.h"
 #include "file_util.h"
 #include "util.h"
+#include "hashtable.h"
 
-char t_fids[T_FIDS][5] = {t_fids_arr};
-char s_fids[S_FIDS][5] = {s_fids_arr};
-char fids[E_FIDS][5] = {t_fids_arr , s_fids_arr};
+char t_fids[T_FIDS][5] = {t_fids_arr}; // Supported frame IDs for editing
+char s_fids[S_FIDS][5] = {s_fids_arr}; // Supported text frames
+char fids[E_FIDS][5] = {t_fids_arr , s_fids_arr}; // Special non-text frames
 
 /**
  * @brief Parses command-line arguments to retrieve new frame data and list of files to edit
@@ -22,28 +23,20 @@ char fids[E_FIDS][5] = {t_fids_arr , s_fids_arr};
  * 
  * @param argc - Command-line argument count 
  * @param argv - Command-line arguments
- * @param edit_fids - Array of frame ID strings
- * @param frame_args - Bool array of frames to edit
  * @param arg_data - Data for arguments provided 
- * @param fid_len - Count of editable frame IDs  
- * @param path - Pointer to array of variable length strings that are paths of files to be edited
+ * @param path - Array of variable length strings that are paths of files to be edited
  * @param path_size - Int pointer containing count of files to be edited
  * @param is_dir - Boolean for given path is directory
  * @param dir_len - Length of filepath directory-to prefix, 0 if arg passed is file.
- * @param titles - Used to save original str to tokenize when writing multiple distinct titles
  * @param num_titles - Pointer to int to save number of titles if provided in args
  * @param verbose - Verbose option selected
  */
 void parse_args(int argc, char *argv[], 
-                char edit_fids[E_FIDS][5],
-                int frame_args[E_FIDS],
-                char arg_data[E_FIDS][256],
-                int fid_len,
+                DIRECT_HT *arg_data,
                 char ***path, 
                 int *path_size,
                 int *is_dir,
                 int *dir_len,
-                char **titles,
                 int *num_titles,
                 int *verbose) {
     
@@ -62,62 +55,54 @@ void parse_args(int argc, char *argv[],
             case 'a': // TPE1: Artist name 
                 if (strlen(optarg) > 256) errflag++;
                 else {
-                    strncpy(arg_data[0], optarg, strlen(optarg));
+                    direct_address_insert(arg_data, "TPE1", optarg);
                     // printf("Option detected: %s - %s\n", edit_fids[0], arg_data[0]);
-
-                    frame_args[0] = 0;
                 }
                 break;
             case 'b': // TALB: Album name
                 if (strlen(optarg) > 256) errflag++;
                 else {
-                    strncpy(arg_data[1], optarg, strlen(optarg));
+                    direct_address_insert(arg_data, "TALB", optarg);
                     // printf("Option detected: %s - %s\n", edit_fids[1], arg_data[1]);
-                
-                    frame_args[1] = 0;
                 }
                 break;
             case 't': // TIT2: Title
                 if (strlen(optarg) > 256) errflag++;
                 else {
-                    (*titles) = calloc(256, sizeof(char)); 
-                    strncpy(*titles, optarg, strlen(optarg));   
+                    direct_address_insert(arg_data, "TIT2", optarg);
+                    char *optarg_cp = calloc(strlen(optarg), sizeof(char));
+                    strncpy(optarg_cp, optarg, strlen(optarg));   
 
-                    char *tok = strtok(*titles, ",");
-                    while (tok != NULL) {
+                    char *tok = strtok(optarg_cp, ",");
+                    while (tok) {
                         (*num_titles)++;
                         tok = strtok(NULL, ",");
                     }
                     
-                    strncpy(*titles, optarg, strlen(optarg)); 
+                    strncpy(optarg_cp, optarg, strlen(optarg)); 
                     if (*num_titles > 1) {
-                        tok = strtok(*titles, ",");   
-                        strncpy(arg_data[2], tok, strlen(tok));
+                        tok = strtok(optarg_cp, ",");
+                        direct_address_insert(arg_data, "TIT2", tok);
                     } else {
-                        strncpy(arg_data[2], optarg, strlen(optarg));
-                        free(*titles);
+                        direct_address_insert(arg_data, "TIT2", optarg_cp);
                     }
-
-                    frame_args[2] = 0;
                     // printf("Option detected: %s - %s\n", edit_fids[2], arg_data[2]);
                 }
                 break;
             case 'n': // TRCK: Track number
-                arg_data[3][0] = '1';
+                char *x = calloc(2, sizeof(char));
+                strncpy(x, "1", 2);
+                direct_address_insert(arg_data, "TRCK", x);
                 // printf("Option detected: %s\n", edit_fids[3]);
-                
-                frame_args[3] = 0;
                 break;
             case 'p': // APIC: Attached Picture
-                strncpy(arg_data[4], optarg, strlen(optarg));
+                direct_address_insert(arg_data, "APIC", optarg);
                 // printf("Option detected: %s\n", edit_fids[4]);
 
-                if (!isJPEG(arg_data[4])) {
+                if (!isJPEG(optarg)) {
                     printf("Image specified is not a JPEG.\n");
                     exit(1);
                 }
-                
-                frame_args[4] = 0;
                 break;
             case 'h':
                 printf("Usage: ./mp3.exe [OPTION]... PATH\n");
@@ -157,9 +142,7 @@ void parse_args(int argc, char *argv[],
     if (optind == argc) {
         printf("Missing path argument.\n");
         exit(1);
-    } else {
-        strncpy(filepath, argv[optind], strlen(argv[optind])+1);
-    }
+    } else strncpy(filepath, argv[optind], strlen(argv[optind])+1);
 
     // POSIX Compliant file info retrieval
     struct stat statbuf; 
@@ -173,15 +156,14 @@ void parse_args(int argc, char *argv[],
     if (S_ISDIR(statbuf.st_mode)) {
         *is_dir = 1;
         *dir_len = strlen(filepath);
-        // check to see last character is directory delimiter
-        if (!(filepath[*dir_len - 1] == '/' || filepath[*dir_len - 1] == '\\')) *dir_len += 1;
+        if (!(filepath[*dir_len - 1] == '/' || filepath[*dir_len - 1] == '\\')) *dir_len += 1; // check to see last character is directory delimiter
 
         DIR *dir = opendir(filepath);
         struct dirent *entry;
         int file_count = 0;
         int max_filename_len = 0;
 
-        char *filepath_prefix = calloc(strlen(filepath) + 1 + 1, 1);
+        char *filepath_prefix = calloc(strlen(filepath) + 1 + 1, sizeof(char));
         strncpy(filepath_prefix, filepath, strlen(filepath));
         filepath_prefix[strlen(filepath)] = '\\';
         
@@ -200,7 +182,6 @@ void parse_args(int argc, char *argv[],
 
                 if (strlen(entry->d_name) > max_filename_len) max_filename_len = strlen(entry->d_name);
             }
-            
             free(full_path);
         }
 
@@ -210,9 +191,9 @@ void parse_args(int argc, char *argv[],
         *path_size = file_count;
 
         // Validate number of files with number of titles
-        if (frame_args[2] == 0 && (*num_titles != 1 && *num_titles != file_count)) {
+        if (direct_address_search(arg_data, "TIT2") == NULL && (*num_titles != 1 && *num_titles != file_count)) {
             printf("Error, number of titles provided is invalid with the number of files being edited.\n");
-            exit(0);
+            exit(1);
         }
 
         for (; j < file_count; j++) 
@@ -230,7 +211,7 @@ void parse_args(int argc, char *argv[],
                 free(full_path);
                 exit(1);
             } else if (S_ISREG(statbuf.st_mode)) {
-                if (arg_data[3][0] == '1' && atoi(entry->d_name) <= 0) { // Input validate filename includes track num if opt is set
+                if (*(char *)(direct_address_search(arg_data, "TRCK")->val) == '1' && atoi(entry->d_name) <= 0) { // Input validate filename includes track num if opt is set
                     printf("Error obtaining file number for input dir file %s", full_path);
                     exit(1);    
                 }
@@ -246,8 +227,7 @@ void parse_args(int argc, char *argv[],
     } else { // Filepath argument is a file
         *is_dir = 0;
 
-        char filename[100];
-        memset(filename, 0, 100);
+        char filename[100] = {0};
         strncpy(filename, filepath, 100);
         char *tok = strtok(filename, "/\\");
         int last_tok_len = 0;
@@ -262,9 +242,9 @@ void parse_args(int argc, char *argv[],
         *path_size = 1;
 
         // Validate number of files with number of titles
-        if (frame_args[2] == 0 && *num_titles > 1) {
+        if (direct_address_search(arg_data, "TIT2") == NULL && *num_titles > 1) {
             printf("Error, number of titles provided is invalid with the number of files being edited.\n");
-            exit(0);
+            exit(1);
         }
 
         *path = malloc(sizeof(char *));
@@ -274,7 +254,7 @@ void parse_args(int argc, char *argv[],
 
 
 
-void print_args(int path_size, char **path, char arg_data[E_FIDS][256], int dir_len, int is_dir) {
+void print_args(int path_size, char **path, DIRECT_HT *arg_data, int dir_len, int is_dir) {
     // Print arguments
     printf("Configuration: \n");
     printf("\tEditing Files: %d\n", path_size);
@@ -283,7 +263,9 @@ void print_args(int path_size, char **path, char arg_data[E_FIDS][256], int dir_
     }
     printf("\tEditing strings: \n");
     for (int i = 0; i < E_FIDS; i++) {
-        printf("\t\t%s: %s\n", fids[i], arg_data[i]);
+        printf("\t\t%s: ", fids[i]);
+        if (arg_data->entries[i]) printf("%s\n", (char *)arg_data->entries[i]->val);
+        else printf("\n");
     }
     printf("\tDirectory length: %d\n", dir_len);
     if (is_dir)
@@ -294,53 +276,39 @@ void print_args(int path_size, char **path, char arg_data[E_FIDS][256], int dir_
 
 
 
-void update_arg_data(char arg_data[E_FIDS][256], char fids[E_FIDS][5], char **path, int id, int dir_len, int num_titles, int frames_edited[E_FIDS], int verbose) {
+void update_arg_data(DIRECT_HT *arg_data, char **path, int id, int dir_len, int num_titles, int verbose) {
     // Updating track name data for next file
-    int trck_ind = get_index(fids, E_FIDS, "TRCK");
-    if (frames_edited[trck_ind] == 0) {
+    if (direct_address_search(arg_data, "TRCK")) {
         if (verbose) printf("Updating track index.\n");
 
-        char trck[4] = {'\0'};
+        char *trck = calloc(5, sizeof(char));
         int int_trck = get_trck(path[id], dir_len);
         snprintf(trck, 4, "%d", int_trck);
-        strncpy(arg_data[trck_ind], trck, 4);
+        direct_address_insert(arg_data, "TRCK", trck);
     } 
     
     // Updating title data for next file
-    int tit2_ind = get_index(fids, E_FIDS, "TIT2");
-    if (id > 0 && frames_edited[tit2_ind] == 0 && num_titles > 1) { 
+    if (direct_address_search(arg_data, "TIT2") && num_titles > 1) { 
         if (verbose) printf("Updating track title.\n");
 
-        char *tok = strtok(NULL, ",");  
-        strncpy(arg_data[tit2_ind], tok, strlen(tok));
+        char *tok = strtok(NULL, ",");
+        direct_address_insert(arg_data, "TIT2", tok);
     }
 }
 
 
 
-int get_additional_mtdt_sz(const int frames_edit[E_FIDS], 
-                           ID3_METAINFO header_metainfo,
-                           char arg_data[E_FIDS][256]) {
+int get_additional_mtdt_sz(const ID3_METAINFO *header_metainfo,
+                           const DIRECT_HT *arg_data) {
     int additional_mtdt_sz = 0;
-    int frames_edit_cp[E_FIDS];
-    memcpy(frames_edit_cp, frames_edit, sizeof(int)*E_FIDS);
+    DIRECT_HT *curr_fid_sz = header_metainfo->fid_sz;
 
-    // Calculate difference in size of new metadata info and current info for existing frames
-    for (int i = 0; i < header_metainfo.frame_count; i++) {
-        int id = get_index(fids, E_FIDS, header_metainfo.fids[i]);
+    for (int i = 0; i < arg_data->buckets; i++) {
+        if (!arg_data->entries[i]) continue;
 
-        if (id != -1 && !frames_edit_cp[id]) { 
-            additional_mtdt_sz += sizeof_frame_data(header_metainfo.fids[i], arg_data[id]) - header_metainfo.frame_sz[i]; 
-            frames_edit_cp[id] = 1;
-        }
-    }
-
-    // Add size of any remaining new frames that will be added
-    for (int i = 0; i < E_FIDS; i++) {
-        if (!frames_edit_cp[i]) {
-            additional_mtdt_sz += sizeof(ID3V2_FRAME_HEADER) + sizeof_frame_data(fids[i], arg_data[i]);
-            frames_edit_cp[i] = 1;
-        }
+        int ind = curr_fid_sz->hash_func(arg_data->entries[i]->key) % curr_fid_sz->buckets;
+        if (curr_fid_sz->entries[ind]) additional_mtdt_sz += sizeof_frame_data(curr_fid_sz->entries[ind]->key, (char *)arg_data->entries[i]->val) - *(int*)curr_fid_sz->entries[ind]->val;
+        else additional_mtdt_sz += sizeof(ID3V2_FRAME_HEADER) + sizeof_frame_data(arg_data->entries[i]->key, (char *)arg_data->entries[i]->val);
     }
 
     return additional_mtdt_sz;
@@ -354,8 +322,7 @@ int get_additional_mtdt_sz(const int frames_edit[E_FIDS],
  * @param metainfo - pointer to metainfo struct to free data 
  */
 void free_id3_data(ID3_METAINFO *metainfo) {
-    free(metainfo->fids);
-    free(metainfo->frame_sz);
+    direct_address_destroy(metainfo->fid_sz);
 }
 
 
@@ -365,39 +332,27 @@ void free_id3_data(ID3_METAINFO *metainfo) {
  * @param path - Pointer to filepath strings
  * @param path_size - Filepaths count
  */
-void free_arg_data(char **path, int path_size, char *titles, int num_titles) {
+void free_arg_data(char **path, const int path_size) {
     for (int i = 0; i < path_size; i++) {
         free(path[i]);
     }
 
     free(path);
-
-    if (num_titles > 1) free(titles);
 }
 
 
 
-int main(int argc, char *argv[]) {
-    extern char fids[E_FIDS][5]; // Supported frame IDs for editing
-    extern char t_fids[T_FIDS][5]; // Supported text frames
-    extern char s_fids[S_FIDS][5]; // Special non-text frames
-    
+int main(int argc, char *argv[]) {   
     char **path; //Array of filepaths
     int path_size; //Number of files in <path>;
-    int is_dir = 0; //Boolean flag for given path is directory 
+    int is_dir = 0; //Boolean flag for if given path is directory 
     int dir_len = 0; //Length of directory prefix in filepath
     int verbose = 0;
-
-    int frame_args[E_FIDS]; //Array of bool flags representing frames that need to be edited
-    for (int i = 0; i < E_FIDS; i++) frame_args[i] = 1;
-
-    char arg_data[E_FIDS][256]; //Data for arguments specified
-    memset(arg_data, '\0', E_FIDS*256);
-
-    char *titles = NULL;
     int num_titles = 0;
 
-    parse_args(argc, argv, fids, frame_args, arg_data, E_FIDS, &path, &path_size, &is_dir, &dir_len, &titles, &num_titles, &verbose);
+    DIRECT_HT *arg_data = direct_address_create(E_FIDS, e_fids_hash); // Direct Address Hash Table for argument data
+
+    parse_args(argc, argv, arg_data, &path, &path_size, &is_dir, &dir_len, &num_titles, &verbose);
     if (verbose) print_args(path_size, path, arg_data, dir_len, is_dir);
 
     // Open, edit, and print ID3 metadata for each file  
@@ -410,24 +365,22 @@ int main(int argc, char *argv[]) {
 
         ID3V2_HEADER header;
         ID3_METAINFO header_metainfo;
-        int frames_edited[E_FIDS];
         read_header(&header, f, path[id], verbose);
         get_ID3_metainfo(&header_metainfo, &header, f, verbose);
-        memcpy(frames_edited, frame_args, sizeof(frames_edited));
 
-        update_arg_data(arg_data, fids, path, id, dir_len, num_titles, frames_edited, verbose);
+        update_arg_data(arg_data, path, id, dir_len, num_titles, verbose);
 
         if (verbose) printf("Calculating additional metadata.\n");
         
         // Calculate new metadata size to predict if metadata header has to be extended
-        int additional_mtdt_sz = get_additional_mtdt_sz(frames_edited, header_metainfo, arg_data);
+        int additional_mtdt_sz = get_additional_mtdt_sz(&header_metainfo, arg_data);
         int allocated_mtdt_sz = synchsafeint32ToInt(header.size);
         if (header_metainfo.metadata_sz + additional_mtdt_sz >= allocated_mtdt_sz) {
             f = extend_header(additional_mtdt_sz, header_metainfo, f, path[id]);
             get_ID3_metainfo(&header_metainfo, &header, f, 0);
         }
 
-        if (verbose) printf("Editing file...\n\n");
+        if (verbose) printf("Editing file...\n");
 
         int bytes_read = 0;
 
@@ -436,20 +389,24 @@ int main(int argc, char *argv[]) {
             ID3V2_FRAME_HEADER frame_header;
             read_frame_header(&frame_header, f);
 
-            int fid_index = get_index(fids, E_FIDS, frame_header.fid);
-            int len_data = synchsafeint32ToInt(frame_header.size);
-            int new_frame_len = len_data;
-
             int readonly = 0;
             int additional_bytes = parse_frame_header_flags(frame_header.flags, &readonly, f);
+            int len_data = synchsafeint32ToInt(frame_header.size);
+
+            if (!in_key_set(arg_data, frame_header.fid)) {
+                read_frame_data(f, len_data);
+                bytes_read += sizeof(ID3V2_FRAME_HEADER) + additional_bytes + len_data;
+                continue;
+            } 
+
+            int ind = arg_data->hash_func(frame_header.fid) % arg_data->buckets;
+            int new_frame_len = len_data;
             
             // If frame not readonly, is editable, and must be edited
-            if (!readonly && fid_index != -1 && frames_edited[fid_index] == 0) {
-                frames_edited[fid_index] = 1;
-
+            if (!readonly && arg_data->entries[ind]) {
                 int remaining_metadata_sz = header_metainfo.metadata_sz - (bytes_read + sizeof(ID3V2_FRAME_HEADER) + len_data);
-                new_frame_len = sizeof_frame_data(frame_header.fid, arg_data[fid_index]);
-                char *frame_data = get_frame_data(frame_header.fid, arg_data[fid_index]);
+                new_frame_len = sizeof_frame_data(frame_header.fid, (char *)arg_data->entries[ind]->val);
+                char *frame_data = get_frame_data(frame_header.fid, (char *)arg_data->entries[ind]->val);
                 edit_frame_data(frame_data, new_frame_len, len_data, remaining_metadata_sz, additional_bytes, f);
 
                 free(frame_data);
@@ -463,13 +420,13 @@ int main(int argc, char *argv[]) {
 
         // Append necessary new frames
         for (int i = 0; i < E_FIDS; i++) {
-            if (frames_edited[i]) continue;
+            if (!arg_data->entries[i] || in_key_set(header_metainfo.fid_sz, e_fids_reverse_lookup[i])) continue;
 
             // Construct new frame header
             ID3V2_FRAME_HEADER frame_header;
-            strncpy(frame_header.fid, fids[i], 4);
-            int new_frame_len = sizeof_frame_data(frame_header.fid, arg_data[i]);
-            char *frame_data = get_frame_data(frame_header.fid, arg_data[i]);
+            strncpy(frame_header.fid, e_fids_reverse_lookup[i], 4);
+            int new_frame_len = sizeof_frame_data(frame_header.fid, (char *)arg_data->entries[i]->val);
+            char *frame_data = get_frame_data(frame_header.fid, (char *)arg_data->entries[i]->val);
 
             char flags[2] = {'\0', '\0'};
             intToSynchsafeint32(new_frame_len, frame_header.size);
@@ -479,13 +436,10 @@ int main(int argc, char *argv[]) {
             free(frame_data);
             
             // Update metainfo struct
-            char (*tmp_fids)[4] = malloc((header_metainfo.frame_count+1) * sizeof(char *));
-            for (int j = 0; j < header_metainfo.frame_count; j++) 
-                strncpy(tmp_fids[j], header_metainfo.fids[j], 4);
-            strncpy(tmp_fids[header_metainfo.frame_count], fids[i], 4);
-            free(header_metainfo.fids);
-            
-            header_metainfo.fids = tmp_fids; 
+            int *fid_sz_new_frame = calloc(1, sizeof(int));
+            *fid_sz_new_frame = new_frame_len;
+            direct_address_insert(header_metainfo.fid_sz, frame_header.fid, fid_sz_new_frame);
+
             header_metainfo.frame_count++;
         }
         
@@ -499,7 +453,7 @@ int main(int argc, char *argv[]) {
         fclose(f);
     }
 
-    free_arg_data(path, path_size, titles, num_titles);
+    free_arg_data(path, path_size);
 
     return 0;
 }

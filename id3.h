@@ -1,6 +1,8 @@
 #ifndef HEADER_INC
 #define HEADER_INC
 
+#include "hashtable.h"
+
 #define IS_SET(X,Y) ((X >> Y) & 0b1)
 #define IS_READONLY(X) IS_SET(X,4)
 
@@ -36,8 +38,7 @@ typedef struct ID3V2_FRAME_HEADER {
 typedef struct ID3_METAINFO {
     int metadata_sz; // Size in bytes of used metadata
     int frame_count;
-    char (*fids)[4];
-    int *frame_sz;
+    DIRECT_HT *fid_sz;
     int frame_pos;
 } ID3_METAINFO;
 

@@ -10,24 +10,11 @@
 #include "path.h"
 #include "hashtable.h"
 
-/*
-	Class of tests:
-		1. Unit test Arguments:
-			- TPE1: Single File, Multi file Folder
-			- TRCK: Single File, Multi file Folder
-				- Multi file different numbers
-			- TIT2: Single File, Multi file Folder
-				- Multi file multi titles
-			- TALB: Single File, Multi file Folder
-		2. Arguments Combined:
-			- TPE1, TRCK, TIT2, TALB: Single File, Multi file Folder
-
-		Test Inputs:
-			- argument data array containing only the necessary test args
-		
-		Test Verification:
-			- All frame data
-			- Metadata size
+/* TODO:
+	1. Modify backup files instead of originals
+	2. Fill out test files
+		- "-p" tests
+		- Missing: 1-3, 8-14, 15-31
 */
 
 char t_fids[T_FIDS][5] = {t_fids_arr};
@@ -121,12 +108,6 @@ int main() {
 		free(trck_num);
 	}
 
-	// TODO:
-	// 1. Multiple file tests
-	// 		- Single argument tests
-	// 		- Multi  argument tests
-	// 2. Multithreaded testing
-
 	cprintf(WHITE_BOLD, "\nResults\n");
 	printf("Total Tests: %d\n", total_tests);
 	cprintf(PASS, "Total Passes: %d\n", total_tests - total_fails);
@@ -138,10 +119,8 @@ int main() {
 int assert(const TEST_DATA *expected, const TEST_DATA *real) {
 	if (expected->data->sz != real->data->sz) return 1; // identical number of frames
 
-	DIRECT_HT *exp_data = expected->data;
-	DIRECT_HT *real_data = real->data; 
-	DIRECT_HT *exp_sizes = expected->data_sz;
-	DIRECT_HT *real_sizes = real->data_sz; 
+	DIRECT_HT *exp_data = expected->data, *exp_sizes = expected->data_sz;
+	DIRECT_HT *real_data = real->data, *real_sizes = real->data_sz; 
 
 	for (int i = 0; i < expected->data->sz; i++) {
 		// TODO: readonly checks
@@ -264,7 +243,7 @@ char *build_cmd_str(const char *testfile, const DIRECT_HT *args) {
 	strncat(cmd, exec_path, strlen(exec_path) + 1);
 	strncat(cmd, " ", 2);
 	
-	char opts[E_FIDS][5] = {"-b ", "-t ", "-p ", "-n ", "-a "};
+	char opts[E_FIDS][5] = {"-b ", "-t ", "-p ", "-n ", "-a "}; // convert to direct_address_table
 	for (int i = 0; i < E_FIDS; i++) {
 		if (args->entries[i] == NULL) continue;
 

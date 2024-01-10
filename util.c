@@ -58,7 +58,8 @@ int get_trck(char *filepath, int prefix_len) {
 }
 
 /**
- * @brief Reverse lookup of frame ID strs to index
+ * @deprecated
+ * @brief Lookup of frame ID str to index
  * 
  * @param fids - String array of FIDs
  * @param fids_len - Size of string array
@@ -73,6 +74,13 @@ int get_index(char (*str)[5], int arr_len, char fid[4]) {
     return -1;
 }
 
+/**
+ * @deprecated
+ * @brief Reverse lookup from index to frame ID str
+ * 
+ * @param i - Index of str
+ * @return char* - Frame ID, len 4
+ */
 char *get_fid(int i) {
     switch(i) {
         case 0: return "TPE1";
@@ -87,6 +95,13 @@ char *get_fid(int i) {
 
 #define RESET "\033[0m"
 
+/**
+ * @brief ANSI escape sequences printf wrapper for editing color and font of terminal output
+ * 
+ * @param color - ANSI escape sequence string
+ * @param fmt - printf formatting string
+ * @param ... 
+ */
 void cprintf(const char *color, const char *fmt, ...) {
 	va_list args;
 	va_start(args, fmt);

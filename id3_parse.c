@@ -119,21 +119,23 @@ int read_data(const ID3_METAINFO metainfo, DIRECT_HT *data, DIRECT_HT *sizes, FI
  * @param f - ID3 File
  * @param metainfo - Metainfo of <f>
  */
-void print_data(FILE *f, ID3_METAINFO metainfo) {
-    int frames = metainfo.frame_count;
+void print_data(FILE *f, ID3_METAINFO *metainfo) {
+    int frames = metainfo->frame_count;
 
     printf("Printing file info:\n");
-    printf("\tMetadata Size: %d\n", metainfo.metadata_sz);
-    printf("\tFrame Count: %d\n", metainfo.frame_count);
-    printf("\tFrames: ");
-    for (int i = 0; i < metainfo.frame_count; i++) printf("%.4s;", metainfo.fids[i]);
+    printf("Metadata Size: %d\n", metainfo->metadata_sz);
+    printf("Frame Count: %d\n", metainfo->frame_count);
+    printf("Frames: ");
+    for (int i = 0; i < metainfo->fid_sz->buckets; i++) { 
+        if (metainfo->fid_sz->entries[i]) printf("%.4s(%d);", metainfo->fid_sz->entries[i]->key, *(int*)metainfo->fid_sz->entries[i]->val);
+    }
     printf("\n");
 
     int bytes_read = 0; 
     char *data;
     char fid_str[5] = {'\0'};
 
-    fseek(f, metainfo.frame_pos, SEEK_SET);
+    fseek(f, metainfo->frame_pos, SEEK_SET);
     
     // Read Final Data
     for (int i = 0; i < frames; i++) {
@@ -295,32 +297,38 @@ ID3_METAINFO *get_ID3_metainfo(ID3_METAINFO *metainfo, ID3V2_HEADER *header, FIL
     
     metainfo->metadata_sz = sz;
     metainfo->frame_count = frames;
-    metainfo->fids = calloc(frames, sizeof(char *));
-    metainfo->frame_sz = calloc(frames, sizeof(int));
+    metainfo->fid_sz = direct_address_create(MAX_HASH_VALUE, &all_fids_hash);
 
     // Save ID3 frame IDs and sizes
     for (int i = 0; i < frames; i++) {
-        if (fread(metainfo->fids[i], 1, 4, f) != 4) {
+        ID3V2_FRAME_HEADER fh;
+        if (fread(fh.fid, 1, 4, f) != 4) {
             printf("get_ID3_metainfo (2): Error occurred reading file identifier.\n");
             exit(1);
         }
-        char ss_sz[4];
-        if (fread(ss_sz, 1, 4, f) != 4) {
+        if (fread(fh.size, 1, 4, f) != 4) {
             printf("Error occurred tag size.\n");
             exit(1);
         }
+        if (fread(fh.flags, 1, 2, f) != 2) {
+            printf("Error occurred reading frame flags.\n");
+            exit(1);
+        }
 
-        int frame_data_sz = synchsafeint32ToInt(ss_sz);
-        metainfo->frame_sz[i] = frame_data_sz;
+        int *frame_data_sz = calloc(1, sizeof(int));
+        *frame_data_sz = synchsafeint32ToInt(fh.size);
+        direct_address_insert(metainfo->fid_sz, fh.fid, frame_data_sz);
 
-        fseek(f, 2 + frame_data_sz, SEEK_CUR);
+        fseek(f, *frame_data_sz, SEEK_CUR);
     }
 
     if (verbose) {
         printf("Metadata Size: %d\n", metainfo->metadata_sz);
         printf("Frame Count: %d\n", metainfo->frame_count);
         printf("Frames: ");
-        for (int i = 0; i < metainfo->frame_count; i++) printf("%.4s(%d);", metainfo->fids[i], metainfo->frame_sz[i]);
+        for (int i = 0; i < metainfo->fid_sz->buckets; i++) { 
+            if (metainfo->fid_sz->entries[i]) printf("%.4s(%d);", metainfo->fid_sz->entries[i]->key, *(int*)metainfo->fid_sz->entries[i]->val);
+        }
         printf("\n\n");
     }
 

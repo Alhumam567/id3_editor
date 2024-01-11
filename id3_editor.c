@@ -151,7 +151,6 @@ void parse_args(int argc, char *argv[],
         exit(1);
     }
         
-        
     // If filepath arg is a DIR, retrieve all child filepaths for editing
     if (S_ISDIR(statbuf.st_mode)) {
         *is_dir = 1;
@@ -215,9 +214,7 @@ void parse_args(int argc, char *argv[],
                     printf("Error obtaining file number for input dir file %s", full_path);
                     exit(1);    
                 }
-
-                //save entire path to file in <path>
-                strncpy((*path)[j++], full_path, strlen(full_path)); 
+                strncpy((*path)[j++], full_path, strlen(full_path)); //save entire path to file in <path>
             }
 
             free(full_path); 
@@ -263,7 +260,7 @@ void print_args(int path_size, char **path, DIRECT_HT *arg_data, int dir_len, in
     }
     printf("\tEditing strings: \n");
     for (int i = 0; i < E_FIDS; i++) {
-        printf("\t\t%s: ", fids[i]);
+        printf("\t\t%s: ", e_fids_reverse_lookup[i]);
         if (arg_data->entries[i]) printf("%s\n", (char *)arg_data->entries[i]->val);
         else printf("\n");
     }
@@ -370,12 +367,13 @@ int main(int argc, char *argv[]) {
 
         update_arg_data(arg_data, path, id, dir_len, num_titles, verbose);
 
-        if (verbose) printf("Calculating additional metadata.\n");
+        if (verbose) printf("Calculating additional metadata...\n");
         
         // Calculate new metadata size to predict if metadata header has to be extended
         int additional_mtdt_sz = get_additional_mtdt_sz(&header_metainfo, arg_data);
         int allocated_mtdt_sz = synchsafeint32ToInt(header.size);
         if (header_metainfo.metadata_sz + additional_mtdt_sz >= allocated_mtdt_sz) {
+            printf("Extending file size...\n");
             f = extend_header(additional_mtdt_sz, header_metainfo, f, path[id]);
             get_ID3_metainfo(&header_metainfo, &header, f, 0);
         }
@@ -443,9 +441,8 @@ int main(int argc, char *argv[]) {
             header_metainfo.frame_count++;
         }
         
-        if (verbose) {
-            // Print all ID3 tags
-            printf("Reading %s metadata :\n\n", path[id]);
+        if (verbose) { // Print all ID3 tags
+            printf("Reading %s metadata :\n", path[id]);
             print_data(f, header_metainfo); 
         }
         

@@ -78,8 +78,9 @@ int main() {
 		fails += single_arg_test(filepath, "TALB", "TEST ALBUM NAME"); // TALB: Album
 		fails += single_arg_test(filepath, "TIT2", "TEST SONG TITLE"); // TIT2: Title
 		fails += single_arg_test(filepath, "TRCK", strtok(testfile_cp, ".")); // TRCK: Track Number
+		fails += single_arg_test(filepath, "APIC", test_image_path); // APIC: Attached picture
 
-		tests += 4;
+		tests += 5;
 		cprintf(PASS, "\t\tPasses: %d\n", tests - fails);
 		cprintf(FAIL, "\t\tFails: %d\n", fails);
 		total_tests += tests;
@@ -93,8 +94,11 @@ int main() {
 		char *trck_num = calloc(5 + strlen(testfile_cp) + 1, sizeof(char));
 		strncpy(trck_num, "TRCK>", 6);
 		strncat(trck_num, testfile_cp, strlen(testfile_cp));
+		char *apic = calloc(5 + strlen(test_image_path) + 1, sizeof(char));
+		strncpy(apic, "APIC>", 6);
+		strncat(apic, test_image_path, strlen(test_image_path));
 
-		fails += var_arg_test(filepath, 4, "TPE1>TEST AUTHOR NAME", "TALB>TEST ALBUM NAME", "TIT2>TEST SONG TITLE", trck_num);
+		fails += var_arg_test(filepath, 5, "TPE1>TEST AUTHOR NAME", "TALB>TEST ALBUM NAME", "TIT2>TEST SONG TITLE", trck_num, apic);
 
 		tests += 1;
 		cprintf(PASS, "\t\tPasses: %d\n", tests - fails);
@@ -102,10 +106,16 @@ int main() {
 		total_tests += tests;
 		total_fails += fails;
 
+		if (file_copy(testfile_bk, filepath) == -1) {
+			printf("Failed copy file.\n");
+			exit(1);
+		} 
+
 		remove(testfile_bk);
 		free(testfile_bk);
 		free(filepath);
 		free(trck_num);
+		free(apic);
 	}
 
 	cprintf(WHITE_BOLD, "\nResults\n");

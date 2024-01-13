@@ -37,6 +37,7 @@ void parse_args(int argc, char *argv[],
                 int *path_size,
                 int *is_dir,
                 int *dir_len,
+                char ***titles,
                 int *num_titles,
                 int *verbose) {
     
@@ -81,8 +82,14 @@ void parse_args(int argc, char *argv[],
                     
                     strncpy(optarg_cp, optarg, strlen(optarg)); 
                     if (*num_titles > 1) {
+                        *titles = calloc(*num_titles, sizeof(char *));
                         tok = strtok(optarg_cp, ",");
-                        direct_address_insert(arg_data, "TIT2", tok);
+                        int i = 0;
+                        while (tok) {
+                            (*titles)[i] = calloc(256, sizeof(char));
+                            strncpy((*titles)[i++], tok, strlen(tok));
+                            tok = strtok(NULL, ",");
+                        }
                     } else {
                         direct_address_insert(arg_data, "TIT2", optarg_cp);
                     }
@@ -162,9 +169,9 @@ void parse_args(int argc, char *argv[],
         int file_count = 0;
         int max_filename_len = 0;
 
-        char *filepath_prefix = calloc(strlen(filepath) + 1 + 1, sizeof(char));
-        strncpy(filepath_prefix, filepath, strlen(filepath));
-        filepath_prefix[strlen(filepath)] = '\\';
+        char *filepath_prefix = calloc(*dir_len + 1, sizeof(char));
+        strncpy(filepath_prefix, filepath, strlen(filepath) + 1);
+        if (!(filepath[*dir_len - 1] == '/' || filepath[*dir_len - 1] == '\\')) strncat(filepath_prefix, "/", 2);
         
         // Count number of files in DIR and find longest length filename
         while ((entry = readdir(dir)) != NULL) {
@@ -176,31 +183,28 @@ void parse_args(int argc, char *argv[],
                 exit(1);
             } else if (S_ISREG(statbuf.st_mode) && 
                         (strlen(entry->d_name) > 1 || strncmp(entry->d_name, ".", 2) != 0) && 
-                        (strlen(entry->d_name) > 2 || strncmp(entry->d_name, "..", 3) != 0)) {
+                        (strlen(entry->d_name) > 2 || strncmp(entry->d_name, "..", 3) != 0) &&
+                        (strlen(entry->d_name) > 4 && !strncmp(entry->d_name + strlen(entry->d_name) - 4, ".mp3", 4))) {
                 file_count++;
 
                 if (strlen(entry->d_name) > max_filename_len) max_filename_len = strlen(entry->d_name);
             }
             free(full_path);
         }
-
         // Allocate memory for all filepaths
-        *path = malloc(sizeof(char *)*file_count);
+        *path = calloc(file_count, sizeof(char *));
         int j = 0;
         *path_size = file_count;
-
         // Validate number of files with number of titles
         if (direct_address_search(arg_data, "TIT2") == NULL && (*num_titles != 1 && *num_titles != file_count)) {
             printf("Error, number of titles provided is invalid with the number of files being edited.\n");
             exit(1);
         }
-
         for (; j < file_count; j++) 
-            (*path)[j] = calloc(max_filename_len + strlen(filepath), 1);
+            (*path)[j] = calloc(max_filename_len + strlen(filepath) + 1, 1);
 
         rewinddir(dir);
         j = 0;
-
         // Save filepaths into <path>
         while ((entry = readdir(dir)) != NULL) {
             char *full_path = concatenate(filepath_prefix, entry->d_name);
@@ -209,12 +213,13 @@ void parse_args(int argc, char *argv[],
                 printf("Error reading input dir file %s, errno: %d", full_path, errno);
                 free(full_path);
                 exit(1);
-            } else if (S_ISREG(statbuf.st_mode)) {
-                if (*(char *)(direct_address_search(arg_data, "TRCK")->val) == '1' && atoi(entry->d_name) <= 0) { // Input validate filename includes track num if opt is set
+            } else if (S_ISREG(statbuf.st_mode) && (strlen(entry->d_name) > 4 && !strncmp(entry->d_name + strlen(entry->d_name) - 4, ".mp3", 4))) {
+                HT_ENTRY *e = direct_address_search(arg_data, "TRCK");
+                if ((e != NULL && *(char *)(e->val) == '1') && atoi(entry->d_name) <= 0) { // Input validate filename includes track num if opt is set
                     printf("Error obtaining file number for input dir file %s", full_path);
                     exit(1);    
                 }
-                strncpy((*path)[j++], full_path, strlen(full_path)); //save entire path to file in <path>
+                strncpy((*path)[j++], full_path, strlen(full_path) + 1); //save entire path to file in <path>
             }
 
             free(full_path); 
@@ -273,7 +278,7 @@ void print_args(int path_size, char **path, DIRECT_HT *arg_data, int dir_len, in
 
 
 
-void update_arg_data(DIRECT_HT *arg_data, char **path, int id, int dir_len, int num_titles, int verbose) {
+void update_arg_data(DIRECT_HT *arg_data, char **path, int id, int dir_len, char **titles, int num_titles, int verbose) {
     // Updating track name data for next file
     if (direct_address_search(arg_data, "TRCK")) {
         if (verbose) printf("Updating track index.\n");
@@ -288,8 +293,7 @@ void update_arg_data(DIRECT_HT *arg_data, char **path, int id, int dir_len, int 
     if (direct_address_search(arg_data, "TIT2") && num_titles > 1) { 
         if (verbose) printf("Updating track title.\n");
 
-        char *tok = strtok(NULL, ",");
-        direct_address_insert(arg_data, "TIT2", tok);
+        direct_address_insert(arg_data, "TIT2", titles[id]);
     }
 }
 
@@ -345,11 +349,12 @@ int main(int argc, char *argv[]) {
     int is_dir = 0; //Boolean flag for if given path is directory 
     int dir_len = 0; //Length of directory prefix in filepath
     int verbose = 0;
+    char **titles;
     int num_titles = 0;
 
     DIRECT_HT *arg_data = direct_address_create(E_FIDS, e_fids_hash); // Direct Address Hash Table for argument data
 
-    parse_args(argc, argv, arg_data, &path, &path_size, &is_dir, &dir_len, &num_titles, &verbose);
+    parse_args(argc, argv, arg_data, &path, &path_size, &is_dir, &dir_len, &titles, &num_titles, &verbose);
     if (verbose) print_args(path_size, path, arg_data, dir_len, is_dir);
 
     // Open, edit, and print ID3 metadata for each file  
@@ -365,7 +370,7 @@ int main(int argc, char *argv[]) {
         read_header(&header, f, path[id], verbose);
         get_ID3_metainfo(&header_metainfo, &header, f, verbose);
 
-        update_arg_data(arg_data, path, id, dir_len, num_titles, verbose);
+        update_arg_data(arg_data, path, id, dir_len, titles, num_titles, verbose);
 
         if (verbose) printf("Calculating additional metadata...\n");
         
@@ -373,7 +378,7 @@ int main(int argc, char *argv[]) {
         int additional_mtdt_sz = get_additional_mtdt_sz(&header_metainfo, arg_data);
         int allocated_mtdt_sz = synchsafeint32ToInt(header.size);
         if (header_metainfo.metadata_sz + additional_mtdt_sz >= allocated_mtdt_sz) {
-            printf("Extending file size...\n");
+            if (verbose) printf("Extending file size...\n");
             f = extend_header(additional_mtdt_sz, header_metainfo, f, path[id]);
             get_ID3_metainfo(&header_metainfo, &header, f, 0);
         }

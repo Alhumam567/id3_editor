@@ -1,3 +1,10 @@
+/**
+ * Author: Alhumam Jabakhanji
+ * Date of Creation: 2023-12-26
+ * 
+ * Automated tester for id3_editor
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,30 +18,34 @@
 #include "hashtable.h"
 
 /* TODO:
-	1. Modify backup files instead of originals
-	2. Fill out test files
-		- "-p" tests
-		- Missing: 1-3, 8-14, 15-31
+	1. Add tests:
+		a) Directory of files
+			- Single title
+			- Multiple titles
 */
 
 char t_fids[T_FIDS][5] = {t_fids_arr};
 char s_fids[S_FIDS][5] = {s_fids_arr};
 char fids[E_FIDS][5] = {t_fids_arr , s_fids_arr};
 
-#define NUM_FILES 5
+#define NUM_FILES 8
 char *testfiles[] = { 
-	// "1.mp3", // Artist
-	// "2.mp3", // Album 
+	"1.mp3", // Artist
+	"2.mp3", // Album 
 	"4.mp3", // Title
 	"5.mp3", // Title, Artist
 	"6.mp3", // Title, Album
 	"7.mp3", // Artist, Album, Title
-	// "8.mp3", // Track
+	"8.mp3", // Track
 	"15.mp3",// All frames present
 };
+#define SF_NUM_FILES 3
+char *subfolder_testfiles[] = {
+	"1.mp3", 
+	"2.mp3",
+	"4.mp3",
+};
 char *testfile_bk;
-ID3V2_HEADER testfile_header;
-ID3_METAINFO testfile_info;
 
 typedef struct test_data {
 	DIRECT_HT *data;
@@ -42,43 +53,42 @@ typedef struct test_data {
 } TEST_DATA;
 
 char *build_cmd_str(const char *testfile, const DIRECT_HT *args);
-void read_arg_data(TEST_DATA *expected, const ID3_METAINFO metainfo, const DIRECT_HT *args);
+void read_arg_data(TEST_DATA *expected, const DIRECT_HT *args);
 void get_file_data(TEST_DATA *tdata, const char *testfile_path);
 void free_test_data(TEST_DATA *tdata);
 
-int single_arg_test(const char *testfile_path, const char key[4], char *arg);
-int var_arg_test(const char *testfile_path, const int n, ...);
-int run_test(const char *testfile_path, const DIRECT_HT *args);
+int single_arg_test(const char *test_path, char **test_path_files, const int num_files, const char key[4], char *arg);
+int var_arg_test(const char *test_path, char **test_path_files, const int num_files, const int n, ...);
+char *setup_file(const char *filename, char **file_backup, const int dir);
+int run_test(const char *test_path, char **test_path_files, const int num_files, const DIRECT_HT *args);
+void clean_file(char *filepath, char *filepath_backup);
 int assert(const TEST_DATA *expected_data, const TEST_DATA *real_data);
 
 int main() {
+	char *apic = calloc(5 + strlen(test_image_path) + 1, sizeof(char));
+	strncpy(apic, "APIC>", 6);
+	strncat(apic, test_image_path, strlen(test_image_path));
+
 	int total_tests = 0, total_fails = 0;
 
-	// Single File Unit Tests
+	/*
+	 * Single File Tests
+	 * - Single argument unit tests
+	 * - All arguments combined test
+	*/ 
 	for (int i = 0; i < NUM_FILES; i++) { 
 		int tests = 0, fails = 0;
 
 		cprintf(YELLOW, "Test File: %s\n", testfiles[i]);
-		cprintf(PURP, "\tSingle Argument Single File Tests:\n ");
+		cprintf(PURP, "\tSingle Argument Tests:\n");
 
-		char *filepath = calloc(strlen(testfolder_path) + strlen(testfiles[i]) + 1, sizeof(char));
-		char testfile_cp[128] = { 0 };
-		strncpy(filepath, testfolder_path, strlen(testfolder_path));
-		strncpy(filepath + strlen(testfolder_path), testfiles[i], strlen(testfiles[i]));
-		strncpy(testfile_cp, testfiles[i], strlen(testfiles[i]));
-		testfile_bk = calloc(strlen(filepath) + 4, sizeof(char));
-		strncpy(testfile_bk, filepath, strlen(filepath) + 1);
-		strncpy(testfile_bk + strlen(filepath), ".bk", 4);
-		if (file_copy(filepath, testfile_bk)) {
-			printf("Error reading test file.\n");
-			exit(1);
-		}
+		char *filepath = setup_file(testfiles[i], &testfile_bk, 0);
 
-		fails += single_arg_test(filepath, "TPE1", "TEST AUTHOR NAME"); // TPE1: Artist		
-		fails += single_arg_test(filepath, "TALB", "TEST ALBUM NAME"); // TALB: Album
-		fails += single_arg_test(filepath, "TIT2", "TEST SONG TITLE"); // TIT2: Title
-		fails += single_arg_test(filepath, "TRCK", strtok(testfile_cp, ".")); // TRCK: Track Number
-		fails += single_arg_test(filepath, "APIC", test_image_path); // APIC: Attached picture
+		fails += single_arg_test(filepath, &filepath, 1, "TPE1", "TEST AUTHOR NAME"); // TPE1: Artist		
+		fails += single_arg_test(filepath, &filepath, 1, "TALB", "TEST ALBUM NAME"); // TALB: Album
+		fails += single_arg_test(filepath, &filepath, 1, "TIT2", "TEST SONG TITLE"); // TIT2: Title
+		fails += single_arg_test(filepath, &filepath, 1, "TRCK", "1"); // TRCK: Track Number
+		fails += single_arg_test(filepath, &filepath, 1, "APIC", test_image_path); // APIC: Attached picture
 
 		tests += 5;
 		cprintf(PASS, "\t\tPasses: %d\n", tests - fails);
@@ -87,18 +97,10 @@ int main() {
 		total_fails += fails;
 
 		// All Arguments Combined Single File Test
-		tests = 0;
-		fails = 0;
-		cprintf(PURP, "\tAll Arguments Combined Single File Test:\n ");
+		cprintf(PURP, "\tAll Arguments Test:\n ");
+		tests = 0; fails = 0;
 
-		char *trck_num = calloc(5 + strlen(testfile_cp) + 1, sizeof(char));
-		strncpy(trck_num, "TRCK>", 6);
-		strncat(trck_num, testfile_cp, strlen(testfile_cp));
-		char *apic = calloc(5 + strlen(test_image_path) + 1, sizeof(char));
-		strncpy(apic, "APIC>", 6);
-		strncat(apic, test_image_path, strlen(test_image_path));
-
-		fails += var_arg_test(filepath, 5, "TPE1>TEST AUTHOR NAME", "TALB>TEST ALBUM NAME", "TIT2>TEST SONG TITLE", trck_num, apic);
+		fails += var_arg_test(filepath, &filepath, 1, 5, "TPE1>TEST AUTHOR NAME", "TALB>TEST ALBUM NAME", "TIT2>TEST SONG TITLE", "TRCK>1", apic);
 
 		tests += 1;
 		cprintf(PASS, "\t\tPasses: %d\n", tests - fails);
@@ -106,23 +108,60 @@ int main() {
 		total_tests += tests;
 		total_fails += fails;
 
-		if (file_copy(testfile_bk, filepath) == -1) {
-			printf("Failed copy file.\n");
-			exit(1);
-		} 
-
-		remove(testfile_bk);
-		free(testfile_bk);
-		free(filepath);
-		free(trck_num);
-		free(apic);
+		clean_file(filepath, testfile_bk);
 	}
+
+	// Metadata overflow test using APIC 
+	cprintf(YELLOW, "Metadata Overflow Test: %s\n", "4.mp3");
+	char *filepath = setup_file("4.mp3", &testfile_bk, 0);
+	total_fails += single_arg_test(filepath, &filepath, 1, "APIC", test_image_path); // APIC: Attached picture
+	total_tests += 1;
+	clean_file(filepath, testfile_bk);
+
+	// All Arguments Directory test
+	cprintf(YELLOW, "Directory Test: %s\n", subfolder_path);
+	cprintf(PURP, "\tAll Arguments Test:\n ");
+	int tests = 0, fails = 0;
+	char **path = calloc(SF_NUM_FILES, sizeof(char *));
+	char **path_bk = calloc(SF_NUM_FILES, sizeof(char *));
+	for (int i = 0; i < SF_NUM_FILES; i++) path[i] = setup_file(subfolder_testfiles[i], &(path_bk[i]), 1);
+	char *folderpath = calloc(strlen(subfolder_path) + strlen(testfolder_path) + 1, sizeof(char));
+	strncpy(folderpath, testfolder_path, strlen(testfolder_path) + 1);
+	strncat(folderpath, subfolder_path, strlen(subfolder_path) + 1);
+	fails += var_arg_test(folderpath, path, SF_NUM_FILES, 5, "TPE1>TEST AUTHOR NAME", "TALB>TEST ALBUM NAME", "TIT2>TEST SONG TITLE", "TRCK>1", apic);
+
+	cprintf(PURP, "\tSingle Title Test:\n ");
+	fails += single_arg_test(folderpath, path, SF_NUM_FILES, "TIT2", "TEST SINGLE TITLE");
+
+	cprintf(PURP, "\tMulti-title Test:\n ");
+	char *multititles = calloc(SF_NUM_FILES * (strlen("TEST") + 1) + 1, sizeof(char));
+	strncat(multititles, "TEST", 5);
+	strncat(multititles, "1,", 3);
+	strncat(multititles, "TEST", 5);
+	strncat(multititles, "2,", 3);
+	strncat(multititles, "TEST", 5);
+	strncat(multititles, "3", 2);
+	fails += single_arg_test(folderpath, path, SF_NUM_FILES, "TIT2", multititles);
+
+	for (int i = 0; i < SF_NUM_FILES; i++) clean_file(path[i], path_bk[i]);
+	free(multititles);
+	free(path);
+	free(path_bk);
+
+	tests += 3;
+	cprintf(PASS, "\t\tPasses: %d\n", tests - fails);
+	cprintf(FAIL, "\t\tFails: %d\n", fails);
+	total_tests += tests;
+	total_fails += fails;
+
+	
 
 	cprintf(WHITE_BOLD, "\nResults\n");
 	printf("Total Tests: %d\n", total_tests);
 	cprintf(PASS, "Total Passes: %d\n", total_tests - total_fails);
 	cprintf(FAIL, "Total Fails: %d\n", total_fails);
 	
+	free(apic);
     return 0;
 }
 
@@ -143,7 +182,7 @@ int assert(const TEST_DATA *expected, const TEST_DATA *real) {
 	return 0;
 }
 
-int var_arg_test(const char *testfile_path, int n, ...) {
+int var_arg_test(const char *test_path, char **test_path_files, const int num_files, int n, ...) {
 	DIRECT_HT *args = direct_address_create(E_FIDS, &e_fids_hash);
 	va_list nargs;
 	va_start(nargs, n);
@@ -164,43 +203,68 @@ int var_arg_test(const char *testfile_path, int n, ...) {
 	}
 	va_end(nargs);
 
-	int c = run_test(testfile_path, args);
+	int c = run_test(test_path, test_path_files, num_files, args);
 	free(args);
 	return c;
 }
 
-int single_arg_test(const char *testfile_path, const char key[4], char *arg) {
+int single_arg_test(const char *test_path, char **test_path_files, const int num_files, const char key[4], char *arg) {
 	DIRECT_HT *args = direct_address_create(E_FIDS, e_fids_hash);
 
 	direct_address_insert(args, key, arg);
 
-	int c = run_test(testfile_path, args);
+	int c = run_test(test_path, test_path_files, num_files, args);
 	free(args);
 	return c;
 }
 
-int run_test(const char *testfile_path, const DIRECT_HT *args) {
-	// Reset testing file
-	if (file_copy(testfile_bk, testfile_path) == -1) {
-		printf("Failed copy file.\n");
+char *setup_file(const char *filename, char **file_backup, const int dir) {
+	char *filepath = calloc(strlen(testfolder_path) + strlen(filename) + 1, sizeof(char));
+	strncpy(filepath, testfolder_path, strlen(testfolder_path));
+	if (dir) strncat(filepath, subfolder_path, strlen(subfolder_path) + 1);
+	strncat(filepath + strlen(testfolder_path), filename, strlen(filename));
+	
+	*file_backup = calloc(strlen(filepath) + 4, sizeof(char));
+	strncpy(*file_backup, filepath, strlen(filepath) + 1);
+	strncat(*file_backup, ".bk", 4);
+	if (file_copy(filepath, *file_backup)) {
+		printf("Error reading test file.\n");
 		exit(1);
-	} 
+	}
+	return filepath;
+}
 
-	char *cmd = build_cmd_str(testfile_path, args);
+int run_test(const char *test_path, char **test_path_files, const int num_files, const DIRECT_HT *args) {
+	char *cmd = build_cmd_str(test_path, args);
 
-	TEST_DATA expected;
-	get_file_data(&expected, testfile_path);
-	read_arg_data(&expected, testfile_info, args);
+	TEST_DATA *expected = calloc(num_files, sizeof(TEST_DATA));
+	for (int i = 0; i < num_files; i++) {	
+		get_file_data(expected + i, test_path_files[i]);
+		read_arg_data(expected + i, args);
+	}
 	
 	int fail = system(cmd);
 	if (fail != 0) return fail;
 
-	TEST_DATA real;
-	get_file_data(&real, testfile_path);
+	TEST_DATA *real = calloc(num_files, sizeof(TEST_DATA));
+	for (int i = 0; i < num_files; i++) get_file_data(real + i, test_path_files[i]);
 
-	fail = assert(&expected, &real);
-	free_test_data(&real);
-	free_test_data(&expected);
+	for (int i = 0; i < num_files; i++) {
+		fail += assert(expected + i, real + i);
+		free_test_data(expected + i);
+		free_test_data(real + i);
+	}
+
+	for (int i = 0; i < num_files; i++) {
+		char *testfile_bk = calloc(strlen(test_path_files[i]) + 3 + 1, sizeof(char));
+		strncat(testfile_bk, test_path_files[i], strlen(test_path_files[i]));
+		strncat(testfile_bk, ".bk", 4);
+		if (file_copy(testfile_bk, test_path_files[i])) {
+			printf("Failed copy file.\n");
+			exit(1);
+		} 
+		free(testfile_bk);
+	}
 
 	printf("\tTest ");
 	if (!fail) cprintf(PASS, "PASS");
@@ -211,7 +275,17 @@ int run_test(const char *testfile_path, const DIRECT_HT *args) {
 	return fail;
 }
 
-void read_arg_data(TEST_DATA *expected, const ID3_METAINFO metainfo, const DIRECT_HT *args) {
+void clean_file(char *filepath, char *filepath_backup) {
+	if (file_copy(filepath_backup, filepath)) {
+		printf("Failed to copy file.\n");
+		exit(1);
+	} 
+	remove(filepath_backup);
+	free(filepath_backup);
+	free(filepath);
+}
+
+void read_arg_data(TEST_DATA *expected, const DIRECT_HT *args) {
 	DIRECT_HT *exp_data = expected->data;
 	DIRECT_HT *exp_sz = expected->data_sz;
 	
@@ -231,6 +305,8 @@ void read_arg_data(TEST_DATA *expected, const ID3_METAINFO metainfo, const DIREC
 }
 
 void get_file_data(TEST_DATA *tdata, const char *testfile_path) {
+	ID3V2_HEADER testfile_header;
+	ID3_METAINFO testfile_info;
 	FILE *f = fopen(testfile_path, "rb");
 	read_header(&testfile_header, f, testfile_path, 0);
 	get_ID3_metainfo(&testfile_info, &testfile_header, f, 0);
@@ -268,7 +344,7 @@ char *build_cmd_str(const char *testfile, const DIRECT_HT *args) {
 
 	strncat(cmd, "\"", 2);
 	strncat(cmd, testfile, strlen(testfile));
-	strncat(cmd, "\" ", 3);
+	strncat(cmd, "\"", 2);
 
 	return cmd;
 }

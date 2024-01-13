@@ -191,15 +191,16 @@ void parse_args(int argc, char *argv[],
             }
             free(full_path);
         }
-        // Allocate memory for all filepaths
-        *path = calloc(file_count, sizeof(char *));
-        int j = 0;
-        *path_size = file_count;
         // Validate number of files with number of titles
         if (direct_address_search(arg_data, "TIT2") == NULL && (*num_titles != 1 && *num_titles != file_count)) {
             printf("Error, number of titles provided is invalid with the number of files being edited.\n");
             exit(1);
         }
+
+        // Allocate memory for all filepaths
+        *path = calloc(file_count, sizeof(char *));
+        int j = 0;
+        *path_size = file_count;
         for (; j < file_count; j++) 
             (*path)[j] = calloc(max_filename_len + strlen(filepath) + 1, 1);
 
@@ -277,42 +278,54 @@ void print_args(int path_size, char **path, DIRECT_HT *arg_data, int dir_len, in
 }
 
 
-
-void update_arg_data(DIRECT_HT *arg_data, char **path, int id, int dir_len, char **titles, int num_titles, int verbose) {
-    // Updating track name data for next file
-    if (direct_address_search(arg_data, "TRCK")) {
+/**
+ * @brief Updates arguments that vary between files if needed (titles, track number)
+ * 
+ * @param arg_data - Argument table
+ * @param file - Next file to edit
+ * @param dir_len - Length of directory prefix to file 
+ * @param title - Next title
+ * @param num_titles - Total number of files to be edited
+ * @param verbose - Bool to print out details
+ */
+void update_arg_data(DIRECT_HT *arg_data, char *file, int dir_len, char *title, int num_titles, int verbose) {
+    if (direct_address_search(arg_data, "TRCK")) { // Updating track name data for next file
         if (verbose) printf("Updating track index.\n");
 
         char *trck = calloc(5, sizeof(char));
-        int int_trck = get_trck(path[id], dir_len);
+        int int_trck = get_trck(file, dir_len);
         snprintf(trck, 4, "%d", int_trck);
         direct_address_insert(arg_data, "TRCK", trck);
     } 
     
-    // Updating title data for next file
-    if (direct_address_search(arg_data, "TIT2") && num_titles > 1) { 
+    if (direct_address_search(arg_data, "TIT2") && num_titles > 1) { // Updating title data for next file
         if (verbose) printf("Updating track title.\n");
 
-        direct_address_insert(arg_data, "TIT2", titles[id]);
+        direct_address_insert(arg_data, "TIT2", title);
     }
 }
 
 
-
-int get_additional_mtdt_sz(const ID3_METAINFO *header_metainfo,
-                           const DIRECT_HT *arg_data) {
-    int additional_mtdt_sz = 0;
+/**
+ * @brief Calculates the change in metadata size to detect if file needs to be extended 
+ * 
+ * @param header_metainfo - File metainfo struct
+ * @param arg_data - Argument data for file
+ * @return int - Total size difference in current metadata and metadata with the new data
+ */
+int mtdt_sz_diff(const ID3_METAINFO *header_metainfo, const DIRECT_HT *arg_data) {
+    int mtdt_sz_diff = 0;
     DIRECT_HT *curr_fid_sz = header_metainfo->fid_sz;
 
     for (int i = 0; i < arg_data->buckets; i++) {
         if (!arg_data->entries[i]) continue;
 
         int ind = curr_fid_sz->hash_func(arg_data->entries[i]->key) % curr_fid_sz->buckets;
-        if (curr_fid_sz->entries[ind]) additional_mtdt_sz += sizeof_frame_data(curr_fid_sz->entries[ind]->key, (char *)arg_data->entries[i]->val) - *(int*)curr_fid_sz->entries[ind]->val;
-        else additional_mtdt_sz += sizeof(ID3V2_FRAME_HEADER) + sizeof_frame_data(arg_data->entries[i]->key, (char *)arg_data->entries[i]->val);
+        if (curr_fid_sz->entries[ind]) mtdt_sz_diff += sizeof_frame_data(curr_fid_sz->entries[ind]->key, (char *)arg_data->entries[i]->val) - *(int*)curr_fid_sz->entries[ind]->val;
+        else mtdt_sz_diff += sizeof(ID3V2_FRAME_HEADER) + sizeof_frame_data(arg_data->entries[i]->key, (char *)arg_data->entries[i]->val);
     }
 
-    return additional_mtdt_sz;
+    return mtdt_sz_diff;
 }
 
 
@@ -349,7 +362,7 @@ int main(int argc, char *argv[]) {
     int is_dir = 0; //Boolean flag for if given path is directory 
     int dir_len = 0; //Length of directory prefix in filepath
     int verbose = 0;
-    char **titles;
+    char **titles  = NULL;
     int num_titles = 0;
 
     DIRECT_HT *arg_data = direct_address_create(E_FIDS, e_fids_hash); // Direct Address Hash Table for argument data
@@ -370,16 +383,17 @@ int main(int argc, char *argv[]) {
         read_header(&header, f, path[id], verbose);
         get_ID3_metainfo(&header_metainfo, &header, f, verbose);
 
-        update_arg_data(arg_data, path, id, dir_len, titles, num_titles, verbose);
+        char *t = (titles) ? titles[id] : NULL;
+        update_arg_data(arg_data, path[id], dir_len, t, num_titles, verbose);
 
         if (verbose) printf("Calculating additional metadata...\n");
         
         // Calculate new metadata size to predict if metadata header has to be extended
-        int additional_mtdt_sz = get_additional_mtdt_sz(&header_metainfo, arg_data);
+        int sz_diff = mtdt_sz_diff(&header_metainfo, arg_data);
         int allocated_mtdt_sz = synchsafeint32ToInt(header.size);
-        if (header_metainfo.metadata_sz + additional_mtdt_sz >= allocated_mtdt_sz) {
+        if (header_metainfo.metadata_sz + sz_diff >= allocated_mtdt_sz) {
             if (verbose) printf("Extending file size...\n");
-            f = extend_header(additional_mtdt_sz, header_metainfo, f, path[id]);
+            f = extend_header(sz_diff, header_metainfo, f, path[id]);
             get_ID3_metainfo(&header_metainfo, &header, f, 0);
         }
 

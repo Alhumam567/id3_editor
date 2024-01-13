@@ -110,21 +110,3 @@ void cprintf(const char *color, const char *fmt, ...) {
 	printf("%s", RESET);
 	va_end(args);
 }
-
-int file_copy(const char *src, const char *dst) {
-	FILE *src_f = fopen(src, "rb");
-	FILE *dst_f = fopen(dst, "wb");
-
-	if (src_f == NULL) return -1;
-
-	char buf[1024];
-	while (!feof(src_f)) {
-		int bytes_read = fread(buf, 1, sizeof(buf), src_f);
-		fwrite(buf, 1, bytes_read, dst_f);
-	}
-
-	fclose(src_f);
-	fclose(dst_f);
-
-	return 0;
-}

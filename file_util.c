@@ -73,7 +73,14 @@ void write_frame_header(ID3V2_FRAME_HEADER header, FILE *f) {
 }
 
 
-
+/**
+ * @brief Appends a new frame in the current position of <f>
+ * 
+ * @param header - Frame header of new frame
+ * @param data - Data of new frame 
+ * @param new_data_sz - size of frame data
+ * @param f - File
+ */
 void append_new_frame(ID3V2_FRAME_HEADER header, char *data, int new_data_sz, FILE *f) {
     write_frame_header(header, f);
     write_frame_data(data, new_data_sz, f); 
@@ -170,7 +177,16 @@ int read_frame_data(FILE *f, int len_data) {
 }
 
 
-
+/**
+ * @brief Edits existing frame data where <f> file position points to the start of frame
+ * 
+ * @param new_data - New data to update frame
+ * @param new_data_len - Length of new data
+ * @param prev_data_len - Length of current data
+ * @param remaining_metadata_sz - Metadata size remaining in header
+ * @param additional_bytes - Length of additional bytes in frame header
+ * @param f - File
+ */
 void edit_frame_data(char *new_data, int new_data_len, int prev_data_len, int remaining_metadata_sz, int additional_bytes, FILE *f) {
     // Return file pointer to beginning of new length and write new length
     fseek(f, -1 * (6 + additional_bytes), SEEK_CUR); 
@@ -181,7 +197,15 @@ void edit_frame_data(char *new_data, int new_data_len, int prev_data_len, int re
 }
 
 
-
+/**
+ * @brief Extends ID3 file to accomodate extra header space
+ * 
+ * @param additional_mtdt_sz - Extra space needed
+ * @param header_metainfo - File metainfo struct
+ * @param f - File to extend
+ * @param old_filename - Filename of <f>
+ * @return FILE* - new FILE *
+ */
 FILE* extend_header(int additional_mtdt_sz, 
                    ID3_METAINFO header_metainfo,
                    FILE *f,
@@ -269,4 +293,23 @@ int isJPEG(char *filepath) {
     }
 
     return 1;
+}
+
+
+int file_copy(const char *src, const char *dst) {
+	FILE *src_f = fopen(src, "rb");
+	FILE *dst_f = fopen(dst, "wb");
+
+	if (src_f == NULL) return -1;
+
+	char buf[1024];
+	while (!feof(src_f)) {
+		int bytes_read = fread(buf, 1, sizeof(buf), src_f);
+		fwrite(buf, 1, bytes_read, dst_f);
+	}
+
+	fclose(src_f);
+	fclose(dst_f);
+
+	return 0;
 }

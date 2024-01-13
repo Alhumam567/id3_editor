@@ -11,3 +11,5 @@ extern void edit_frame_data(char *new_data, int new_data_len, int prev_data_len,
 extern FILE *extend_header(int additional_metadata_sz, ID3_METAINFO header_metainfo, FILE *f, char *old_filename);
 
 extern int isJPEG(char *filepath);
+
+extern int file_copy(const char *src, const char *dst);

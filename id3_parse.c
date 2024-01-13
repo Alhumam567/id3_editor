@@ -84,6 +84,15 @@ ID3V2_FRAME_HEADER *read_frame_header(ID3V2_FRAME_HEADER *h, FILE *f) {
 }
 
 
+/**
+ * @brief Reads file frames and saves data and data size into hash tables <data>, <sizes>
+ * 
+ * @param metainfo - File metainfo struct
+ * @param data - Data hash table to update
+ * @param sizes - Data size hash table to update
+ * @param f - ID3 file
+ * @return int - Error code (pass=0)
+ */
 int read_data(const ID3_METAINFO metainfo, DIRECT_HT *data, DIRECT_HT *sizes, FILE *f) {
     fseek(f, metainfo.frame_pos, SEEK_SET);
     

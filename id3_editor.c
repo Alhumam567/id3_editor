@@ -90,8 +90,6 @@ void parse_args(int argc, char *argv[],
                             strncpy((*titles)[i++], tok, strlen(tok));
                             tok = strtok(NULL, ",");
                         }
-                    } else {
-                        direct_address_insert(arg_data, "TIT2", optarg_cp);
                     }
                     // printf("Option detected: %s - %s\n", edit_fids[2], arg_data[2]);
                 }
@@ -126,6 +124,7 @@ void parse_args(int argc, char *argv[],
                 printf("\t%-14s\tWrite track number for all files in path. If this\n\t%-11s\toption is selected, the track number for the file\n\t%-11s\tmust be contained in beginning of the filename.\n", "-n, ", " ", " ");
                 printf("\t%-14s\tAttach image to all files in path, must be JPEG.\n", "-p IMAGE_PATH, ");
                 
+                direct_address_destroy(arg_data);
                 exit(0);
                 break;
             case 'v':
@@ -192,7 +191,7 @@ void parse_args(int argc, char *argv[],
             free(full_path);
         }
         // Validate number of files with number of titles
-        if (direct_address_search(arg_data, "TIT2") == NULL && (*num_titles != 1 && *num_titles != file_count)) {
+        if (direct_address_search(arg_data, "TIT2") != NULL && (*num_titles != 1 && *num_titles != file_count)) {
             printf("Error, number of titles provided is invalid with the number of files being edited.\n");
             exit(1);
         }
@@ -245,7 +244,7 @@ void parse_args(int argc, char *argv[],
         *path_size = 1;
 
         // Validate number of files with number of titles
-        if (direct_address_search(arg_data, "TIT2") == NULL && *num_titles > 1) {
+        if (direct_address_search(arg_data, "TIT2") != NULL && *num_titles > 1) {
             printf("Error, number of titles provided is invalid with the number of files being edited.\n");
             exit(1);
         }
@@ -306,6 +305,7 @@ void update_arg_data(DIRECT_HT *arg_data, char *file, int dir_len, char *title, 
 }
 
 
+
 /**
  * @brief Calculates the change in metadata size to detect if file needs to be extended 
  * 
@@ -341,17 +341,17 @@ void free_id3_data(ID3_METAINFO *metainfo) {
 
 
 /**
- * @brief Free 2D dynamically allocated filepaths array
+ * @brief Frees filepath strings and titles if necessary
  * 
  * @param path - Pointer to filepath strings
  * @param path_size - Filepaths count
+ * @param titles - List of track titles
+ * @param num_titles - Number of titles
  */
-void free_arg_data(char **path, const int path_size) {
-    for (int i = 0; i < path_size; i++) {
-        free(path[i]);
-    }
-
+void free_str_arr(char **path, const int path_size, char **titles, const int num_titles) {
+    for (int i = 0; i < path_size; i++) free(path[i]);
     free(path);
+    if (num_titles > 1) free(titles);
 }
 
 
@@ -466,10 +466,11 @@ int main(int argc, char *argv[]) {
         }
         
         free_id3_data(&header_metainfo);
+        if (id == path_size - 1) direct_address_destroy(arg_data);
         fclose(f);
     }
 
-    free_arg_data(path, path_size);
+    free_str_arr(path, path_size, titles, num_titles);
 
     return 0;
 }

@@ -50,59 +50,56 @@ void parse_args(int argc, char *argv[],
     int opt, errflag=0;
     extern char *optarg;
     extern int optind, optopt;
+    char *t;
 
     while((opt = getopt(argc, argv, "+a:b:t:p:nhv")) != -1) {
         switch(opt) {
-            case 'a': // TPE1: Artist name 
-                if (strlen(optarg) > 256) errflag++;
-                else {
-                    direct_address_insert(arg_data, "TPE1", optarg);
-                    // printf("Option detected: %s - %s\n", edit_fids[0], arg_data[0]);
-                }
+            case 'a':; // TPE1: Artist name 
+                t = calloc(strlen(optarg), sizeof(char));
+                strncpy(t, optarg, strlen(optarg));
+                direct_address_insert(arg_data, "TPE1", t);
                 break;
-            case 'b': // TALB: Album name
-                if (strlen(optarg) > 256) errflag++;
-                else {
-                    direct_address_insert(arg_data, "TALB", optarg);
-                    // printf("Option detected: %s - %s\n", edit_fids[1], arg_data[1]);
-                }
+            case 'b':; // TALB: Album name
+                t = calloc(strlen(optarg), sizeof(char));
+                strncpy(t, optarg, strlen(optarg));
+                direct_address_insert(arg_data, "TALB", t);
                 break;
-            case 't': // TIT2: Title
-                if (strlen(optarg) > 256) errflag++;
-                else {
-                    direct_address_insert(arg_data, "TIT2", optarg);
-                    char *optarg_cp = calloc(strlen(optarg), sizeof(char));
-                    strncpy(optarg_cp, optarg, strlen(optarg));   
+            case 't':; // TIT2: Title
+                t = calloc(strlen(optarg), sizeof(char));
+                strncpy(t, optarg, strlen(optarg));
 
-                    char *tok = strtok(optarg_cp, ",");
+                direct_address_insert(arg_data, "TIT2", t);
+                char *optarg_cp = calloc(strlen(optarg), sizeof(char));
+                strncpy(optarg_cp, optarg, strlen(optarg));   
+
+                char *tok = strtok(optarg_cp, ",");
+                while (tok) {
+                    (*num_titles)++;
+                    tok = strtok(NULL, ",");
+                }
+                
+                strncpy(optarg_cp, optarg, strlen(optarg)); 
+                if (*num_titles > 1) {
+                    *titles = calloc(*num_titles, sizeof(char *));
+                    tok = strtok(optarg_cp, ",");
+                    int i = 0;
                     while (tok) {
-                        (*num_titles)++;
+                        (*titles)[i] = calloc(256, sizeof(char));
+                        strncpy((*titles)[i++], tok, strlen(tok));
                         tok = strtok(NULL, ",");
                     }
-                    
-                    strncpy(optarg_cp, optarg, strlen(optarg)); 
-                    if (*num_titles > 1) {
-                        *titles = calloc(*num_titles, sizeof(char *));
-                        tok = strtok(optarg_cp, ",");
-                        int i = 0;
-                        while (tok) {
-                            (*titles)[i] = calloc(256, sizeof(char));
-                            strncpy((*titles)[i++], tok, strlen(tok));
-                            tok = strtok(NULL, ",");
-                        }
-                    }
-                    // printf("Option detected: %s - %s\n", edit_fids[2], arg_data[2]);
                 }
                 break;
-            case 'n': // TRCK: Track number
+            case 'n':; // TRCK: Track number
                 char *x = calloc(2, sizeof(char));
                 strncpy(x, "1", 2);
                 direct_address_insert(arg_data, "TRCK", x);
-                // printf("Option detected: %s\n", edit_fids[3]);
+
                 break;
-            case 'p': // APIC: Attached Picture
-                direct_address_insert(arg_data, "APIC", optarg);
-                // printf("Option detected: %s\n", edit_fids[4]);
+            case 'p':; // APIC: Attached Picture
+                t = calloc(strlen(optarg), sizeof(char));
+                strncpy(t, optarg, strlen(optarg));
+                direct_address_insert(arg_data, "APIC", t);
 
                 if (!isJPEG(optarg)) {
                     printf("Image specified is not a JPEG.\n");
@@ -462,7 +459,7 @@ int main(int argc, char *argv[]) {
         
         if (verbose) { // Print all ID3 tags
             printf("Reading %s metadata :\n", path[id]);
-            print_data(f, header_metainfo); 
+            print_data(f, &header_metainfo); 
         }
         
         free_id3_data(&header_metainfo);

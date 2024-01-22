@@ -11,7 +11,7 @@ extern ID3V2_FRAME_HEADER *read_frame_header(ID3V2_FRAME_HEADER *h, FILE *f);
 
 extern int read_data(const ID3_METAINFO metainfo, DIRECT_HT *data, DIRECT_HT *sizes, FILE *f);
 
-extern void print_data(FILE *f, ID3_METAINFO metainfo);
+extern void print_data(FILE *f, const ID3_METAINFO *metainfo);
 
 extern ID3_METAINFO *get_ID3_metainfo(ID3_METAINFO *metainfo, ID3V2_HEADER *header, FILE *f, int verbose);
 

@@ -254,7 +254,7 @@ FILE* extend_header(int additional_mtdt_sz,
     }
     fseek(f2, 6, SEEK_SET);
 
-    char ssint[4];
+    char ssint[4] = {0};
     intToSynchsafeint32(new_sz, ssint);
     fwrite(ssint, 4, 1, f2);
 

@@ -128,7 +128,7 @@ int read_data(const ID3_METAINFO metainfo, DIRECT_HT *data, DIRECT_HT *sizes, FI
  * @param f - ID3 File
  * @param metainfo - Metainfo of <f>
  */
-void print_data(FILE *f, ID3_METAINFO *metainfo) {
+void print_data(FILE *f, const ID3_METAINFO *metainfo) {
     int frames = metainfo->frame_count;
     
     printf("Metadata Size: %d\n", metainfo->metadata_sz);

@@ -128,6 +128,7 @@ int main() {
 	tests += 3;
 
 	for (int i = 0; i < SF_NUM_FILES; i++) clean_file(path[i], path_bk[i]);
+	free(folderpath);
 	free(path);
 	free(path_bk);
 
@@ -142,6 +143,7 @@ int main() {
 	cprintf(FAIL, "Total Fails: %d\n", total_fails);
 	
 	free(apic);
+	
     return 0;
 }
 
@@ -184,22 +186,23 @@ int var_arg_test(const char *test_path, char **test_path_files, char **bk_path_f
 	va_end(nargs);
 
 	int c = run_test(test_path, test_path_files, bk_path_files, num_files, args);
-	free(args);
+	direct_address_destroy(args);
 	return c;
 }
 
 int single_arg_test(const char *test_path, char **test_path_files, char **bk_path_files, const int num_files, const char key[4], char *arg) {
 	DIRECT_HT *args = direct_address_create(E_FIDS, e_fids_hash);
 
-	direct_address_insert(args, key, arg);
-
+	char *val = calloc(strlen(arg), sizeof(int));
+	strncpy(val, arg, strlen(arg)+1);
+	direct_address_insert(args, key, val);
 	int c = run_test(test_path, test_path_files, bk_path_files, num_files, args);
-	free(args);
+	direct_address_destroy(args);
 	return c;
 }
 
 char *setup_file(const char *filename, char **file_backup, const int dir) {
-	char *filepath = calloc(strlen(testfolder_path) + strlen(filename) + 1, sizeof(char));
+	char *filepath = calloc(strlen(testfolder_path) + strlen(subfolder_path) + strlen(filename) + 1, sizeof(char));
 	strncpy(filepath, testfolder_path, strlen(testfolder_path));
 	if (dir) strncat(filepath, subfolder_path, strlen(subfolder_path) + 1);
 	strncat(filepath + strlen(testfolder_path), filename, strlen(filename));
@@ -241,6 +244,8 @@ int run_test(const char *test_path, char **test_path_files, char **bk_path_files
 			exit(1);
 		} 
 	}
+	free(expected);
+	free(real);
 
 	printf("\tTest ");
 	if (!fail) cprintf(PASS, "PASS");
@@ -273,8 +278,7 @@ void read_arg_data(TEST_DATA *expected, const DIRECT_HT *args) {
 
 		int *arg_sz = calloc(1, sizeof(int));
 		*arg_sz = sizeof_frame_data(key, args->entries[i]->val);
-		char *arg_data = calloc(*arg_sz, sizeof(char));
-		strncpy(arg_data, get_frame_data(key, args->entries[i]->val), *arg_sz);
+		char *arg_data = get_frame_data(key, args->entries[i]->val);
 		direct_address_insert(exp_sz, key, arg_sz);
 		direct_address_insert(exp_data, key, arg_data);
 	}
@@ -292,6 +296,7 @@ void get_file_data(TEST_DATA *tdata, const char *testfile_path) {
 	read_data(testfile_info, tdata->data, tdata->data_sz, f);
 	
 	fclose(f);
+	direct_address_destroy(testfile_info.fid_sz);
 }
 
 void free_test_data(TEST_DATA *tdata) {

@@ -55,22 +55,22 @@ void parse_args(int argc, char *argv[],
     while((opt = getopt(argc, argv, "+a:b:t:p:nhv")) != -1) {
         switch(opt) {
             case 'a':; // TPE1: Artist name 
-                t = calloc(strlen(optarg), sizeof(char));
+                t = calloc(strlen(optarg) + 1, sizeof(char));
                 strncpy(t, optarg, strlen(optarg));
                 direct_address_insert(arg_data, "TPE1", t);
                 break;
             case 'b':; // TALB: Album name
-                t = calloc(strlen(optarg), sizeof(char));
+                t = calloc(strlen(optarg) + 1, sizeof(char));
                 strncpy(t, optarg, strlen(optarg));
                 direct_address_insert(arg_data, "TALB", t);
                 break;
             case 't':; // TIT2: Title
-                t = calloc(strlen(optarg), sizeof(char));
+                t = calloc(strlen(optarg) + 1, sizeof(char));
                 strncpy(t, optarg, strlen(optarg));
 
                 direct_address_insert(arg_data, "TIT2", t);
-                char *optarg_cp = calloc(strlen(optarg), sizeof(char));
-                strncpy(optarg_cp, optarg, strlen(optarg));   
+                char *optarg_cp = calloc(strlen(optarg) + 1, sizeof(char));
+                strncpy(optarg_cp, optarg, strlen(optarg) + 1);   
 
                 char *tok = strtok(optarg_cp, ",");
                 while (tok) {
@@ -89,6 +89,7 @@ void parse_args(int argc, char *argv[],
                         tok = strtok(NULL, ",");
                     }
                 }
+                free(optarg_cp);
                 break;
             case 'n':; // TRCK: Track number
                 char *x = calloc(2, sizeof(char));
@@ -97,7 +98,7 @@ void parse_args(int argc, char *argv[],
 
                 break;
             case 'p':; // APIC: Attached Picture
-                t = calloc(strlen(optarg), sizeof(char));
+                t = calloc(strlen(optarg) + 1, sizeof(char));
                 strncpy(t, optarg, strlen(optarg));
                 direct_address_insert(arg_data, "APIC", t);
 
@@ -221,7 +222,8 @@ void parse_args(int argc, char *argv[],
 
             free(full_path); 
         }
-
+        closedir(dir);
+        free(filepath);
         free(filepath_prefix);
     } else { // Filepath argument is a file
         *is_dir = 0;
@@ -326,17 +328,6 @@ int mtdt_sz_diff(const ID3_METAINFO *header_metainfo, const DIRECT_HT *arg_data)
 }
 
 
-
-/**
- * @brief Free header metainfo data
- * 
- * @param metainfo - pointer to metainfo struct to free data 
- */
-void free_id3_data(ID3_METAINFO *metainfo) {
-    direct_address_destroy(metainfo->fid_sz);
-}
-
-
 /**
  * @brief Frees filepath strings and titles if necessary
  * 
@@ -391,6 +382,7 @@ int main(int argc, char *argv[]) {
         if (header_metainfo.metadata_sz + sz_diff >= allocated_mtdt_sz) {
             if (verbose) printf("Extending file size...\n");
             f = extend_header(sz_diff, header_metainfo, f, path[id]);
+            direct_address_destroy(header_metainfo.fid_sz);
             get_ID3_metainfo(&header_metainfo, &header, f, 0);
         }
 
@@ -462,7 +454,7 @@ int main(int argc, char *argv[]) {
             print_data(f, &header_metainfo); 
         }
         
-        free_id3_data(&header_metainfo);
+        direct_address_destroy(header_metainfo.fid_sz);
         if (id == path_size - 1) direct_address_destroy(arg_data);
         fclose(f);
     }

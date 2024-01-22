@@ -108,6 +108,7 @@ void rewrite_buffer(signed int offset, int remaining_metadata_size, int zero_buf
         fseek(f, -1*buf_size, SEEK_CUR);
         char *emp_buf = calloc(buf_size, 1);
         fwrite(emp_buf, 1, buf_size, f);
+        free(emp_buf);
     }
 
     fseek(f, -1*(buf_size) + offset, SEEK_CUR);
@@ -226,6 +227,7 @@ FILE* extend_header(int additional_mtdt_sz,
     fseek(f2, 0, SEEK_SET);
     fwrite(buf, buf_sz, 1, f2);
     fwrite(empty_buf, additional_sz, 1, f2);
+    free(empty_buf);
 
     fseek(f, 0, SEEK_END);
     int mp3_buf_sz = ftell(f) - buf_sz;

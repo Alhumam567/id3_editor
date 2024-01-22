@@ -108,8 +108,7 @@ int read_data(const ID3_METAINFO metainfo, DIRECT_HT *data, DIRECT_HT *sizes, FI
         size = calloc(1, sizeof(int));
         *size = synchsafeint32ToInt(frame_header.size);
         d = calloc(*size, sizeof(char));
-        int r = fread(d, *size, 1, f);
-        if (r == 0){
+        if (!fread(d, *size, 1, f)){
             printf("Error occurred reading frame data.\n");
             return 1;
         }
@@ -357,7 +356,7 @@ ID3_METAINFO *get_ID3_metainfo(ID3_METAINFO *metainfo, ID3V2_HEADER *header, FIL
  * @param arg_data - Provided argument data
  * @return int - Size of the frame
  */
-int sizeof_frame_data(char fid[4], const char arg_data[256]) {
+int sizeof_frame_data(char fid[4], const char *arg_data) {
     int sz = 0;
     int id;
 

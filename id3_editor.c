@@ -16,6 +16,205 @@ char t_fids[T_FIDS][5] = {t_fids_arr}; // Supported frame IDs for editing
 char s_fids[S_FIDS][5] = {s_fids_arr}; // Supported text frames
 char fids[E_FIDS][5] = {t_fids_arr , s_fids_arr}; // Special non-text frames
 
+
+/**
+ * @brief Updates arguments that vary between files if needed (titles, track number)
+ * 
+ * @param arg_data - Argument table
+ * @param file - Next file to edit
+ * @param dir_len - Length of directory prefix to file 
+ * @param title - Next title
+ * @param num_titles - Total number of files to be edited
+ * @param verbose - Bool to print out details
+ */
+void update_arg_data(DIRECT_HT *arg_data, char *file, int dir_len, char *title, int num_titles, int verbose) {
+    if (direct_address_search(arg_data, "TRCK")) { // Updating track name data for next file
+        if (verbose) printf("Updating track index.\n");
+
+        char *trck = calloc(5, sizeof(char));
+        int int_trck = get_trck(file, dir_len);
+        snprintf(trck, 4, "%d", int_trck);
+        direct_address_insert(arg_data, "TRCK", trck);
+    } 
+    
+    if (direct_address_search(arg_data, "TIT2") && num_titles > 1) { // Updating title data for next file
+        if (verbose) printf("Updating track title.\n");
+
+        direct_address_insert(arg_data, "TIT2", title);
+    }
+}
+
+
+/**
+ * @brief Calculates the change in metadata size to detect if file needs to be extended 
+ * 
+ * @param header_metainfo - File metainfo struct
+ * @param arg_data - Argument data for file
+ * @return int - Total size difference in current metadata and metadata with the new data
+ */
+int mtdt_sz_diff(const ID3_METAINFO *header_metainfo, const DIRECT_HT *arg_data) {
+    int mtdt_sz_diff = 0;
+    DIRECT_HT *curr_fid_sz = header_metainfo->fid_sz;
+
+    for (int i = 0; i < arg_data->buckets; i++) {
+        if (!arg_data->entries[i]) continue;
+
+        int ind = curr_fid_sz->hash_func(arg_data->entries[i]->key) % curr_fid_sz->buckets;
+        if (curr_fid_sz->entries[ind]) mtdt_sz_diff += sizeof_frame_data(curr_fid_sz->entries[ind]->key, (char *)arg_data->entries[i]->val) - *(int*)curr_fid_sz->entries[ind]->val;
+        else mtdt_sz_diff += sizeof(ID3V2_FRAME_HEADER) + sizeof_frame_data(arg_data->entries[i]->key, (char *)arg_data->entries[i]->val);
+    }
+
+    return mtdt_sz_diff;
+}
+
+
+/**
+ * @brief Frees filepath strings and titles if necessary
+ * 
+ * @param path - Pointer to filepath strings
+ * @param path_size - Filepaths count
+ * @param titles - List of track titles
+ * @param num_titles - Number of titles
+ */
+void free_str_arr(char **path, const int path_size, char **titles, const int num_titles) {
+    for (int i = 0; i < path_size; i++) free(path[i]);
+    free(path);
+    if (num_titles > 1) free(titles);
+}
+
+void parse_args(int argc, char *argv[], 
+                DIRECT_HT *arg_data,
+                char ***path, 
+                int *path_size,
+                int *is_dir,
+                int *dir_len,
+                char ***titles,
+                int *num_titles,
+                int *verbose);
+
+void print_args(int path_size, char **path, DIRECT_HT *arg_data, int dir_len, int is_dir);
+
+int main(int argc, char *argv[]) {   
+    char **path; //Array of filepaths
+    int path_size; //Number of files in <path>;
+    int is_dir = 0; //Boolean flag for if given path is directory 
+    int dir_len = 0; //Length of directory prefix in filepath
+    int verbose = 0;
+    char **titles  = NULL;
+    int num_titles = 0;
+
+    DIRECT_HT *arg_data = direct_address_create(E_FIDS, e_fids_hash); // Direct Address Hash Table for argument data
+
+    parse_args(argc, argv, arg_data, &path, &path_size, &is_dir, &dir_len, &titles, &num_titles, &verbose);
+    if (verbose) print_args(path_size, path, arg_data, dir_len, is_dir);
+
+    // Open, edit, and print ID3 metadata for each file  
+    for (int id = 0; id < path_size; id++) {
+        FILE *f = fopen(path[id], "r+b");  
+        if (f == NULL) {
+            printf("File does not exist.\n");
+            exit(1);
+        }
+
+        ID3V2_HEADER header;
+        ID3_METAINFO header_metainfo;
+        read_header(&header, f, path[id], verbose);
+        get_ID3_metainfo(&header_metainfo, &header, f, verbose);
+
+        char *t = (titles) ? titles[id] : NULL;
+        update_arg_data(arg_data, path[id], dir_len, t, num_titles, verbose);
+
+        if (verbose) printf("Calculating additional metadata...\n");
+        
+        // Calculate new metadata size to predict if metadata header has to be extended
+        int sz_diff = mtdt_sz_diff(&header_metainfo, arg_data);
+        int allocated_mtdt_sz = synchsafeint32ToInt(header.size);
+        if (header_metainfo.metadata_sz + sz_diff >= allocated_mtdt_sz) {
+            if (verbose) printf("Extending file size...\n");
+            f = extend_header(sz_diff, header_metainfo, f, path[id]);
+            direct_address_destroy(header_metainfo.fid_sz);
+            get_ID3_metainfo(&header_metainfo, &header, f, 0);
+        }
+
+        if (verbose) printf("Editing file...\n");
+
+        int bytes_read = 0;
+
+        // Search and edit existing frames
+        for(int i = 0; i < header_metainfo.frame_count; i++) {
+            ID3V2_FRAME_HEADER frame_header;
+            read_frame_header(&frame_header, f);
+
+            int readonly = 0;
+            int additional_bytes = parse_frame_header_flags(frame_header.flags, &readonly, f);
+            int len_data = synchsafeint32ToInt(frame_header.size);
+
+            if (!in_key_set(arg_data, frame_header.fid)) {
+                read_frame_data(f, len_data);
+                bytes_read += sizeof(ID3V2_FRAME_HEADER) + additional_bytes + len_data;
+                continue;
+            } 
+
+            int ind = arg_data->hash_func(frame_header.fid) % arg_data->buckets;
+            int new_frame_len = len_data;
+            
+            // If frame not readonly, is editable, and must be edited
+            if (!readonly && arg_data->entries[ind]) {
+                int remaining_metadata_sz = header_metainfo.metadata_sz - (bytes_read + sizeof(ID3V2_FRAME_HEADER) + len_data);
+                new_frame_len = sizeof_frame_data(frame_header.fid, (char *)arg_data->entries[ind]->val);
+                char *frame_data = get_frame_data(frame_header.fid, (char *)arg_data->entries[ind]->val);
+                edit_frame_data(frame_data, new_frame_len, len_data, remaining_metadata_sz, additional_bytes, f);
+
+                free(frame_data);
+            }
+
+            read_frame_data(f, new_frame_len);
+            bytes_read += sizeof(ID3V2_FRAME_HEADER) + additional_bytes + len_data; 
+        }
+
+        if (verbose) printf("Appending frames to file...\n");
+
+        // Append necessary new frames
+        for (int i = 0; i < E_FIDS; i++) {
+            if (!arg_data->entries[i] || in_key_set(header_metainfo.fid_sz, e_fids_reverse_lookup[i])) continue;
+
+            // Construct new frame header
+            ID3V2_FRAME_HEADER frame_header;
+            strncpy(frame_header.fid, e_fids_reverse_lookup[i], 4);
+            int new_frame_len = sizeof_frame_data(frame_header.fid, (char *)arg_data->entries[i]->val);
+            char *frame_data = get_frame_data(frame_header.fid, (char *)arg_data->entries[i]->val);
+
+            char flags[2] = {'\0', '\0'};
+            intToSynchsafeint32(new_frame_len, frame_header.size);
+            strncpy(frame_header.flags, flags, 2);
+
+            append_new_frame(frame_header, frame_data, new_frame_len, f);
+            free(frame_data);
+            
+            // Update metainfo struct
+            int *fid_sz_new_frame = calloc(1, sizeof(int));
+            *fid_sz_new_frame = new_frame_len;
+            direct_address_insert(header_metainfo.fid_sz, frame_header.fid, fid_sz_new_frame);
+
+            header_metainfo.frame_count++;
+        }
+        
+        if (verbose) { // Print all ID3 tags
+            printf("Reading %s metadata :\n", path[id]);
+            print_data(f, &header_metainfo); 
+        }
+        
+        direct_address_destroy(header_metainfo.fid_sz);
+        if (id == path_size - 1) direct_address_destroy(arg_data);
+        fclose(f);
+    }
+
+    free_str_arr(path, path_size, titles, num_titles);
+
+    return 0;
+}
+
+
 /**
  * @brief Parses command-line arguments to retrieve new frame data and list of files to edit
  * Allocates memory for required for string of filepaths and returns the amount of files for editing
@@ -253,10 +452,7 @@ void parse_args(int argc, char *argv[],
     }
 }
 
-
-
 void print_args(int path_size, char **path, DIRECT_HT *arg_data, int dir_len, int is_dir) {
-    // Print arguments
     printf("Configuration: \n");
     printf("\tEditing Files: %d\n", path_size);
     for (int i = 0; i < path_size; i++) {
@@ -273,193 +469,4 @@ void print_args(int path_size, char **path, DIRECT_HT *arg_data, int dir_len, in
         printf("\tDir: true\n\n");
     else 
         printf("\tDir: false\n\n");
-}
-
-
-/**
- * @brief Updates arguments that vary between files if needed (titles, track number)
- * 
- * @param arg_data - Argument table
- * @param file - Next file to edit
- * @param dir_len - Length of directory prefix to file 
- * @param title - Next title
- * @param num_titles - Total number of files to be edited
- * @param verbose - Bool to print out details
- */
-void update_arg_data(DIRECT_HT *arg_data, char *file, int dir_len, char *title, int num_titles, int verbose) {
-    if (direct_address_search(arg_data, "TRCK")) { // Updating track name data for next file
-        if (verbose) printf("Updating track index.\n");
-
-        char *trck = calloc(5, sizeof(char));
-        int int_trck = get_trck(file, dir_len);
-        snprintf(trck, 4, "%d", int_trck);
-        direct_address_insert(arg_data, "TRCK", trck);
-    } 
-    
-    if (direct_address_search(arg_data, "TIT2") && num_titles > 1) { // Updating title data for next file
-        if (verbose) printf("Updating track title.\n");
-
-        direct_address_insert(arg_data, "TIT2", title);
-    }
-}
-
-
-
-/**
- * @brief Calculates the change in metadata size to detect if file needs to be extended 
- * 
- * @param header_metainfo - File metainfo struct
- * @param arg_data - Argument data for file
- * @return int - Total size difference in current metadata and metadata with the new data
- */
-int mtdt_sz_diff(const ID3_METAINFO *header_metainfo, const DIRECT_HT *arg_data) {
-    int mtdt_sz_diff = 0;
-    DIRECT_HT *curr_fid_sz = header_metainfo->fid_sz;
-
-    for (int i = 0; i < arg_data->buckets; i++) {
-        if (!arg_data->entries[i]) continue;
-
-        int ind = curr_fid_sz->hash_func(arg_data->entries[i]->key) % curr_fid_sz->buckets;
-        if (curr_fid_sz->entries[ind]) mtdt_sz_diff += sizeof_frame_data(curr_fid_sz->entries[ind]->key, (char *)arg_data->entries[i]->val) - *(int*)curr_fid_sz->entries[ind]->val;
-        else mtdt_sz_diff += sizeof(ID3V2_FRAME_HEADER) + sizeof_frame_data(arg_data->entries[i]->key, (char *)arg_data->entries[i]->val);
-    }
-
-    return mtdt_sz_diff;
-}
-
-
-/**
- * @brief Frees filepath strings and titles if necessary
- * 
- * @param path - Pointer to filepath strings
- * @param path_size - Filepaths count
- * @param titles - List of track titles
- * @param num_titles - Number of titles
- */
-void free_str_arr(char **path, const int path_size, char **titles, const int num_titles) {
-    for (int i = 0; i < path_size; i++) free(path[i]);
-    free(path);
-    if (num_titles > 1) free(titles);
-}
-
-
-
-int main(int argc, char *argv[]) {   
-    char **path; //Array of filepaths
-    int path_size; //Number of files in <path>;
-    int is_dir = 0; //Boolean flag for if given path is directory 
-    int dir_len = 0; //Length of directory prefix in filepath
-    int verbose = 0;
-    char **titles  = NULL;
-    int num_titles = 0;
-
-    DIRECT_HT *arg_data = direct_address_create(E_FIDS, e_fids_hash); // Direct Address Hash Table for argument data
-
-    parse_args(argc, argv, arg_data, &path, &path_size, &is_dir, &dir_len, &titles, &num_titles, &verbose);
-    if (verbose) print_args(path_size, path, arg_data, dir_len, is_dir);
-
-    // Open, edit, and print ID3 metadata for each file  
-    for (int id = 0; id < path_size; id++) {
-        FILE *f = fopen(path[id], "r+b");  
-        if (f == NULL) {
-            printf("File does not exist.\n");
-            exit(1);
-        }
-
-        ID3V2_HEADER header;
-        ID3_METAINFO header_metainfo;
-        read_header(&header, f, path[id], verbose);
-        get_ID3_metainfo(&header_metainfo, &header, f, verbose);
-
-        char *t = (titles) ? titles[id] : NULL;
-        update_arg_data(arg_data, path[id], dir_len, t, num_titles, verbose);
-
-        if (verbose) printf("Calculating additional metadata...\n");
-        
-        // Calculate new metadata size to predict if metadata header has to be extended
-        int sz_diff = mtdt_sz_diff(&header_metainfo, arg_data);
-        int allocated_mtdt_sz = synchsafeint32ToInt(header.size);
-        if (header_metainfo.metadata_sz + sz_diff >= allocated_mtdt_sz) {
-            if (verbose) printf("Extending file size...\n");
-            f = extend_header(sz_diff, header_metainfo, f, path[id]);
-            direct_address_destroy(header_metainfo.fid_sz);
-            get_ID3_metainfo(&header_metainfo, &header, f, 0);
-        }
-
-        if (verbose) printf("Editing file...\n");
-
-        int bytes_read = 0;
-
-        // Search and edit existing frames
-        for(int i = 0; i < header_metainfo.frame_count; i++) {
-            ID3V2_FRAME_HEADER frame_header;
-            read_frame_header(&frame_header, f);
-
-            int readonly = 0;
-            int additional_bytes = parse_frame_header_flags(frame_header.flags, &readonly, f);
-            int len_data = synchsafeint32ToInt(frame_header.size);
-
-            if (!in_key_set(arg_data, frame_header.fid)) {
-                read_frame_data(f, len_data);
-                bytes_read += sizeof(ID3V2_FRAME_HEADER) + additional_bytes + len_data;
-                continue;
-            } 
-
-            int ind = arg_data->hash_func(frame_header.fid) % arg_data->buckets;
-            int new_frame_len = len_data;
-            
-            // If frame not readonly, is editable, and must be edited
-            if (!readonly && arg_data->entries[ind]) {
-                int remaining_metadata_sz = header_metainfo.metadata_sz - (bytes_read + sizeof(ID3V2_FRAME_HEADER) + len_data);
-                new_frame_len = sizeof_frame_data(frame_header.fid, (char *)arg_data->entries[ind]->val);
-                char *frame_data = get_frame_data(frame_header.fid, (char *)arg_data->entries[ind]->val);
-                edit_frame_data(frame_data, new_frame_len, len_data, remaining_metadata_sz, additional_bytes, f);
-
-                free(frame_data);
-            }
-
-            read_frame_data(f, new_frame_len);
-            bytes_read += sizeof(ID3V2_FRAME_HEADER) + additional_bytes + len_data; 
-        }
-
-        if (verbose) printf("Appending frames to file...\n");
-
-        // Append necessary new frames
-        for (int i = 0; i < E_FIDS; i++) {
-            if (!arg_data->entries[i] || in_key_set(header_metainfo.fid_sz, e_fids_reverse_lookup[i])) continue;
-
-            // Construct new frame header
-            ID3V2_FRAME_HEADER frame_header;
-            strncpy(frame_header.fid, e_fids_reverse_lookup[i], 4);
-            int new_frame_len = sizeof_frame_data(frame_header.fid, (char *)arg_data->entries[i]->val);
-            char *frame_data = get_frame_data(frame_header.fid, (char *)arg_data->entries[i]->val);
-
-            char flags[2] = {'\0', '\0'};
-            intToSynchsafeint32(new_frame_len, frame_header.size);
-            strncpy(frame_header.flags, flags, 2);
-
-            append_new_frame(frame_header, frame_data, new_frame_len, f);
-            free(frame_data);
-            
-            // Update metainfo struct
-            int *fid_sz_new_frame = calloc(1, sizeof(int));
-            *fid_sz_new_frame = new_frame_len;
-            direct_address_insert(header_metainfo.fid_sz, frame_header.fid, fid_sz_new_frame);
-
-            header_metainfo.frame_count++;
-        }
-        
-        if (verbose) { // Print all ID3 tags
-            printf("Reading %s metadata :\n", path[id]);
-            print_data(f, &header_metainfo); 
-        }
-        
-        direct_address_destroy(header_metainfo.fid_sz);
-        if (id == path_size - 1) direct_address_destroy(arg_data);
-        fclose(f);
-    }
-
-    free_str_arr(path, path_size, titles, num_titles);
-
-    return 0;
 }

@@ -1,4 +1,8 @@
-FLAGS := -fsanitize=address -Wall -g
+ifeq ($(OS),Windows_NT)
+	FLAGS := -Wall -g
+else
+	FLAGS := -fsanitize=address -Wall -g
+endif
 OUT := out/
 HT_FILES := id3_hash.o hashtable.o
 TEST_FILES := $(addprefix $(OUT),util.o file_util.o $(HT_FILES) id3_parse.o test.o)

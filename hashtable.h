@@ -21,6 +21,8 @@ typedef struct direct_ht {
 
 extern const char e_fids_reverse_lookup[][5];
 
+extern unsigned int dt_hash(const DIRECT_HT *ht, const char k[4]); 
+
 extern DIRECT_HT *direct_address_create(const int buckets, unsigned int (*hash_func)(const char key[4]));
 
 extern int direct_address_destroy(DIRECT_HT *ht);

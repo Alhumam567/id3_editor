@@ -54,10 +54,13 @@ unsigned int all_fids_hash(const char k[4]) {
     return hash(k, 4);
 }
 
+unsigned int dt_hash(const DIRECT_HT *ht, const char k[4]) { return ht->hash_func(k) % ht->buckets; }
+
 int direct_address_insert(DIRECT_HT *ht, const char key[4], void *val) {
-    if (ht->entries[ht->hash_func(key) % ht->buckets] != NULL) {
-        free(ht->entries[ht->hash_func(key) % ht->buckets]->val);
-        ht->entries[ht->hash_func(key) % ht->buckets]->val = val;
+    const unsigned int h = dt_hash(ht, key);
+    if (ht->entries[h] != NULL) {
+        free(ht->entries[h]->val);
+        ht->entries[h]->val = val;
         return 2;
     }
     
@@ -65,15 +68,16 @@ int direct_address_insert(DIRECT_HT *ht, const char key[4], void *val) {
     strncpy(new_entry->key, key, 4);
     new_entry->val = val;
 
-    ht->entries[ht->hash_func(key) % ht->buckets] = new_entry;
+    ht->entries[h] = new_entry;
     ht->sz++;
     return 1;
 }
 
 int direct_address_delete(DIRECT_HT *ht, HT_ENTRY *entry) {
-    if (ht->entries[ht->hash_func(entry->key) % ht->buckets] == NULL) return 0;
+    const unsigned int h = dt_hash(ht, entry->key);
+    if (ht->entries[h] == NULL) return 0;
 
-    ht->entries[ht->hash_func(entry->key) % ht->buckets] = NULL;
+    ht->entries[h] = NULL;
     free(entry->val);
     free(entry);
     ht->sz--;
@@ -82,11 +86,11 @@ int direct_address_delete(DIRECT_HT *ht, HT_ENTRY *entry) {
 }
 
 HT_ENTRY *direct_address_search(const DIRECT_HT *ht, const char key[4]) {
-    return ht->entries[ht->hash_func(key) % ht->buckets];
+    return ht->entries[dt_hash(ht, key)];
 }
 
 int in_key_set(const DIRECT_HT *ht, const char str[4]) {
-    int i = ht->hash_func(str) % ht->buckets;
+    int i = dt_hash(ht, str);
     return ht->entries[i] != NULL && !strncmp(ht->entries[i]->key, str, 4);
 }
 

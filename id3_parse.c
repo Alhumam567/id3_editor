@@ -21,24 +21,20 @@ ID3V2_HEADER *read_header(ID3V2_HEADER *header, FILE *f, const char *filename, i
         printf("read_header: Error occurred reading file identifier.\n");
         exit(1);
     }
-
     if (fread(header->ver, 1, 2, f) != 2) {
         printf("Error occurred reading version.\n");
         exit(1);
     }
-
     if (fread(&header->flags, 1, 1, f) != 1) {
         printf("Error occurred flags.\n");
         exit(1);
     }
-
     if (fread(&header->size, 1, 4, f) != 4) {
         printf("Error occurred tag size.\n");
         exit(1);
     }
 
     int metadata_size = synchsafeint32ToInt(header->size);
-
     if (verbose) {
         printf("%s Header: \n", filename);
         printf("\tFile Identifier: %c%c%c\n", header->fid[0], header->fid[1], header->fid[2]);
@@ -64,18 +60,22 @@ int parse_frame_header_flags(char flags[2], int *readonly, FILE *f);
  * 
  * @param h - Pointer to frame header struct to save data 
  * @param f - File pointer to read data from
+ * @param err_str - Error message string header
  * @return ID3V2_FRAME_HEADER* - returns frame header struct <h> 
  */
-ID3V2_FRAME_HEADER *read_frame_header(ID3V2_FRAME_HEADER *h, FILE *f) {
-    if (fread(h->fid, 1, 4, f) != 4) {
-        printf("read_frame_header: Error occurred reading file identifier.\n");
+ID3V2_FRAME_HEADER *read_frame_header(ID3V2_FRAME_HEADER *h, FILE *f, const char *err_str) {
+    if (fread(h->fid, 4, 1, f) != 1) {
+        printf("%s", err_str);
+        printf("Error occurred reading file identifier.\n");
         exit(1);
     }
-    if (fread(h->size, 1, 4, f) != 4) {
+    if (fread(h->size, 4, 1, f) != 1) {
+        printf("%s", err_str);
         printf("Error occurred tag size.\n");
         exit(1);
     }
-    if (fread(h->flags, 1, 2, f) != 2) {
+    if (fread(h->flags, 2, 1, f) != 1) {
+        printf("%s", err_str);
         printf("Error occurred flags.\n");
         exit(1);
     }
@@ -100,7 +100,7 @@ int read_data(const ID3_METAINFO metainfo, DIRECT_HT *data, DIRECT_HT *sizes, FI
     char *d;
     for (int i = 0; i < metainfo.frame_count; i++) {
         ID3V2_FRAME_HEADER frame_header;
-        read_frame_header(&frame_header, f);
+        read_frame_header(&frame_header, f, "read_data: ");
 
         int readonly = 0;
         parse_frame_header_flags(frame_header.flags, &readonly, f);
@@ -147,19 +147,7 @@ void print_data(FILE *f, const ID3_METAINFO *metainfo) {
     // Read Final Data
     for (int i = 0; i < frames; i++) {
         ID3V2_FRAME_HEADER frame_header;
-        
-        if (fread(frame_header.fid, 1, 4, f) != 4) {
-            printf("Error occurred reading file identifier.\n");
-            exit(1);
-        }
-        if (fread(frame_header.size, 1, 4, f) != 4) {
-            printf("Error occurred tag size.\n");
-            exit(1);
-        }
-        if (fread(frame_header.flags, 1, 2, f) != 2) {
-            printf("Error occurred flags.\n");
-            exit(1);
-        }
+        read_frame_header(&frame_header, f, "print_data: ");
 
         int readonly = 0;
         int additional_bytes = parse_frame_header_flags(frame_header.flags, &readonly, f);
@@ -241,7 +229,6 @@ int parse_frame_header_flags(char flags[2], int *readonly, FILE *f) {
     int additional_bytes = 0;
 
     if (IS_READONLY(flags[0])) *readonly = 1;
-
     if (IS_SET(flags[1], 6)) additional_bytes++; // Grouping Identity Byte
     if (IS_SET(flags[1], 2)) additional_bytes++; // Encryption Type Byte
     if (IS_SET(flags[1], 0)) additional_bytes+=4; // Data length indicator bit set, additional synchsafe int
@@ -273,23 +260,8 @@ ID3_METAINFO *get_ID3_metainfo(ID3_METAINFO *metainfo, ID3V2_HEADER *header, FIL
     // Count FILE *f metadata byte size and number of ID3 frames
     while (sz < metadata_alloc) {
         ID3V2_FRAME_HEADER frame_header;
-        frame_header.fid[0] = '\0';
-        if (fread(frame_header.fid, 1, 4, f) != 4) {
-            printf("get_ID3_metainfo (1): Error occurred reading file identifier [%d].\n", sz);
-            exit(1);    
-        }
-
-        // End of frame data
-        if (frame_header.fid[0] == '\0') break;
-
-        if (fread(frame_header.size, 1, 4, f) != 4) {
-            printf("Error occurred reading tag size.\n");
-            exit(1);
-        }
-        if (fread(frame_header.flags, 1, 2, f) != 2) {
-            printf("Error occurred reading frame flags.\n");
-            exit(1);
-        }
+        read_frame_header(&frame_header, f, "get_id3_metadata (1): ");
+        if (frame_header.fid[0] == '\0') break; // End of frame data
 
         int readonly = 0;
         int additional_bytes = parse_frame_header_flags(frame_header.flags, &readonly, f);
@@ -308,23 +280,12 @@ ID3_METAINFO *get_ID3_metainfo(ID3_METAINFO *metainfo, ID3V2_HEADER *header, FIL
 
     // Save ID3 frame IDs and sizes
     for (int i = 0; i < frames; i++) {
-        ID3V2_FRAME_HEADER fh;
-        if (fread(fh.fid, 1, 4, f) != 4) {
-            printf("get_ID3_metainfo (2): Error occurred reading file identifier.\n");
-            exit(1);
-        }
-        if (fread(fh.size, 1, 4, f) != 4) {
-            printf("Error occurred tag size.\n");
-            exit(1);
-        }
-        if (fread(fh.flags, 1, 2, f) != 2) {
-            printf("Error occurred reading frame flags.\n");
-            exit(1);
-        }
+        ID3V2_FRAME_HEADER frame_header;
+        read_frame_header(&frame_header, f, "get_id3_metadata (2): ");
 
         int *frame_data_sz = calloc(1, sizeof(int));
-        *frame_data_sz = synchsafeint32ToInt(fh.size);
-        direct_address_insert(metainfo->fid_sz, fh.fid, frame_data_sz);
+        *frame_data_sz = synchsafeint32ToInt(frame_header.size);
+        direct_address_insert(metainfo->fid_sz, frame_header.fid, frame_data_sz);
 
         fseek(f, *frame_data_sz, SEEK_CUR);
     }
@@ -414,7 +375,6 @@ char *get_frame_data(char fid[4], const char arg_data[256]) {
                 frame_data[i++] = '\0';
 
                 frame_data[i++] = '\0'; // picture type
-
                 frame_data[i++] = '\0'; // description
 
                 // Picture data

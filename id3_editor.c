@@ -59,7 +59,7 @@ int mtdt_sz_diff(const ID3_METAINFO *header_metainfo, const DIRECT_HT *arg_data)
     for (int i = 0; i < arg_data->buckets; i++) {
         if (!arg_data->entries[i]) continue;
 
-        int ind = curr_fid_sz->hash_func(arg_data->entries[i]->key) % curr_fid_sz->buckets;
+        int ind = dt_hash(curr_fid_sz, arg_data->entries[i]->key);
         if (curr_fid_sz->entries[ind]) mtdt_sz_diff += sizeof_frame_data(curr_fid_sz->entries[ind]->key, (char *)arg_data->entries[i]->val) - *(int*)curr_fid_sz->entries[ind]->val;
         else mtdt_sz_diff += sizeof(ID3V2_FRAME_HEADER) + sizeof_frame_data(arg_data->entries[i]->key, (char *)arg_data->entries[i]->val);
     }
@@ -139,7 +139,6 @@ int main(int argc, char *argv[]) {
         if (verbose) printf("Editing file...\n");
 
         int bytes_read = 0;
-
         // Search and edit existing frames
         for(int i = 0; i < header_metainfo.frame_count; i++) {
             ID3V2_FRAME_HEADER frame_header;
@@ -148,27 +147,17 @@ int main(int argc, char *argv[]) {
             int readonly = 0;
             int additional_bytes = parse_frame_header_flags(frame_header.flags, &readonly, f);
             int len_data = synchsafeint32ToInt(frame_header.size);
+            int ind = dt_hash(arg_data, frame_header.fid);
 
-            if (!in_key_set(arg_data, frame_header.fid)) {
-                read_frame_data(f, len_data);
-                bytes_read += sizeof(ID3V2_FRAME_HEADER) + additional_bytes + len_data;
-                continue;
-            } 
-
-            int ind = arg_data->hash_func(frame_header.fid) % arg_data->buckets;
-            int new_frame_len = len_data;
-            
-            // If frame not readonly, is editable, and must be edited
-            if (!readonly && arg_data->entries[ind]) {
+            if (in_key_set(arg_data, frame_header.fid) && !readonly) {
                 int remaining_metadata_sz = header_metainfo.metadata_sz - (bytes_read + sizeof(ID3V2_FRAME_HEADER) + len_data);
-                new_frame_len = sizeof_frame_data(frame_header.fid, (char *)arg_data->entries[ind]->val);
+                int new_frame_len = sizeof_frame_data(frame_header.fid, (char *)arg_data->entries[ind]->val);
                 char *frame_data = get_frame_data(frame_header.fid, (char *)arg_data->entries[ind]->val);
                 edit_frame_data(frame_data, new_frame_len, len_data, remaining_metadata_sz, additional_bytes, f);
-
                 free(frame_data);
+                len_data = new_frame_len;
             }
-
-            read_frame_data(f, new_frame_len);
+            read_frame_data(f, len_data);
             bytes_read += sizeof(ID3V2_FRAME_HEADER) + additional_bytes + len_data; 
         }
 
@@ -180,11 +169,10 @@ int main(int argc, char *argv[]) {
 
             // Construct new frame header
             ID3V2_FRAME_HEADER frame_header;
+            char flags[2] = {'\0', '\0'};
             strncpy(frame_header.fid, e_fids_reverse_lookup[i], 4);
             int new_frame_len = sizeof_frame_data(frame_header.fid, (char *)arg_data->entries[i]->val);
             char *frame_data = get_frame_data(frame_header.fid, (char *)arg_data->entries[i]->val);
-
-            char flags[2] = {'\0', '\0'};
             intToSynchsafeint32(new_frame_len, frame_header.size);
             strncpy(frame_header.flags, flags, 2);
 

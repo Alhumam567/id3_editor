@@ -6,4 +6,7 @@ misc/
 .vscode/
 test/
 out/
+.deps/
+.cache/
 path.h
+compile_commands.json

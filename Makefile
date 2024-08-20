@@ -4,7 +4,7 @@ OUTDIR := out
 SRCS = $(addsuffix .c,$(FILES))
 OBJS = $(addprefix $(OUTDIR)/,$(addsuffix .o,$(FILES)))
 
-id3_editor.exe : $(OBJS)
+id3_editor.exe : $(OUTDIR) $(OBJS) 
 	$(CC) $(OBJS) -o $@ 
 
 clean:

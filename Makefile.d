@@ -8,6 +8,7 @@ $(OUTDIR)/%.o : %.c $(DEPDIR)/%.d | $(DEPDIR)
 	$(MAKEDEP) -o $@
 
 $(DEPDIR): ; @mkdir -p $@
+$(OUTDIR): ; @mkdir -p $@
 
 DEPFILES := $(SRCS:%.c=$(DEPDIR)/%.d)
 $(DEPFILES):

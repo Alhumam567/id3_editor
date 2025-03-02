@@ -34,7 +34,7 @@ ID3V2_HEADER *read_header(ID3V2_HEADER *header, FILE *f, const char *filename, i
         exit(1);
     }
 
-    int metadata_size = synchsafeint32ToInt(header->size);
+    int metadata_size = synchsafeint32ToInt(header->size); // HEADER SIZE IS SYNCHSAFE FOR ID3V2.3 and ID3V2.4
     if (verbose) {
         printf("%s Header: \n", filename);
         printf("\tFile Identifier: %c%c%c\n", header->fid[0], header->fid[1], header->fid[2]);
@@ -84,6 +84,23 @@ ID3V2_FRAME_HEADER *read_frame_header(ID3V2_FRAME_HEADER *h, FILE *f, const char
 }
 
 
+/** Determines frame header size based on ID3 ver
+ * @param metainfo - ID3 struct
+ * @param size	   - char[4] ID3 size bytes
+ * @return int - frame header byte size
+ */
+int get_frame_header_size(const ID3_METAINFO *metainfo, const char *size) {
+	int _size;
+	if (metainfo->is_ss) 
+		_size = synchsafeint32ToInt(size);
+	else {
+		char rev[4] = {0};
+		for (int i = 0; i < 4; i++) rev[i] = size[3-i];
+		_size = *((int *) rev);
+	}
+	return _size;
+}
+
 /**
  * @brief Reads file frames and saves data and data size into hash tables <data>, <sizes>
  * 
@@ -106,7 +123,8 @@ int read_data(const ID3_METAINFO metainfo, DIRECT_HT *data, DIRECT_HT *sizes, FI
         parse_frame_header_flags(frame_header.flags, &readonly, f);
 
         size = calloc(1, sizeof(int));
-        *size = synchsafeint32ToInt(frame_header.size);
+		*size = get_frame_header_size(&metainfo, frame_header.size);
+
         d = calloc(*size, sizeof(char));
         if (!fread(d, *size, 1, f)){
             printf("Error occurred reading frame data.\n");
@@ -134,7 +152,8 @@ void print_data(FILE *f, const ID3_METAINFO *metainfo) {
     printf("Frame Count: %d\n", metainfo->frame_count);
     printf("Frames: ");
     for (int i = 0; i < metainfo->fid_sz->buckets; i++) { 
-        if (metainfo->fid_sz->entries[i]) printf("%.4s(%d);", metainfo->fid_sz->entries[i]->key, *(int*)metainfo->fid_sz->entries[i]->val);
+        if (metainfo->fid_sz->entries[i]) 
+			printf("%.4s(%d);", metainfo->fid_sz->entries[i]->key, *(int*)metainfo->fid_sz->entries[i]->val);
     }
     printf("\n");
 
@@ -152,7 +171,8 @@ void print_data(FILE *f, const ID3_METAINFO *metainfo) {
         int readonly = 0;
         int additional_bytes = parse_frame_header_flags(frame_header.flags, &readonly, f);
 
-        int frame_data_sz = synchsafeint32ToInt(frame_header.size);
+        int frame_data_sz = get_frame_header_size(metainfo, frame_header.size);
+
         strncpy(fid_str, frame_header.fid, 4);
 
         printf("FID: %.4s, ", fid_str);
@@ -185,9 +205,16 @@ void print_data(FILE *f, const ID3_METAINFO *metainfo) {
 
 
 
-int parse_ext_header_flags(ID3V2_EXT_HEADER *ext_header, FILE *f) {
+int parse_ext_header_flags(ID3V2_EXT_HEADER *ext_header, ID3V2_HEADER *header, FILE *f) {
     fread(ext_header->size, 4, 1, f);
-    int ext_header_sz = synchsafeint32ToInt(ext_header->size);
+
+    int ext_header_sz;
+	if (header->ver[0] != 3) ext_header_sz = synchsafeint32ToInt(ext_header->size);
+	else { 
+		char rev[4] = {0};
+		for (int i = 0; i < 4; i++) rev[i] = ext_header->size[3-i];
+		ext_header_sz = *((int *) rev);
+	}
 
     fread(&(ext_header->num_bytes), 1, 1, f);
     if (ext_header->num_bytes != 1) {
@@ -204,12 +231,12 @@ int parse_ext_header_flags(ID3V2_EXT_HEADER *ext_header, FILE *f) {
 
 
 
-int parse_header_flags(char flags, FILE *f) {
+int parse_header_flags(ID3V2_HEADER *header, FILE *f) {
     int frame_pos = 10;
 
-    if (IS_SET(flags, 6)) { // Extended Header bit
+    if (IS_SET(header->flags, 6)) { // Extended Header bit
         ID3V2_EXT_HEADER ext_header;
-        frame_pos = parse_ext_header_flags(&ext_header, f) + sizeof(ID3V2_FRAME_HEADER);
+        frame_pos = parse_ext_header_flags(&ext_header, header, f) + sizeof(ID3V2_FRAME_HEADER);
     }
 
     return frame_pos;
@@ -249,9 +276,12 @@ int parse_frame_header_flags(char flags[2], int *readonly, FILE *f) {
  * @param verbose  - Prints metainfo to stdout
  * @return ID3_METAINFO* - returns pointer to metainfo struct <metainfo>
  */
-ID3_METAINFO *get_ID3_metainfo(ID3_METAINFO *metainfo, ID3V2_HEADER *header, FILE *f, int verbose) {
+ID3_METAINFO *get_ID3_metainfo(ID3_METAINFO *metainfo, FILE *f, const char *filename, int verbose) {
+    ID3V2_HEADER *header = &(metainfo->header);
     fseek(f, 10, SEEK_SET); // Set FILE * to end of header
-    metainfo->frame_pos = parse_header_flags(header->flags, f); // Parse header flags and seek past extended header if necessary
+    metainfo->frame_pos = parse_header_flags(header, f); // Parse header flags and seek past extended header if necessary
+    metainfo->is_ss = (header->ver[0] == 3) ? 0 : 1;
+    read_header(&(metainfo->header), f, filename, verbose);
 
     int sz = 0;
     int frames = 0;
@@ -266,7 +296,7 @@ ID3_METAINFO *get_ID3_metainfo(ID3_METAINFO *metainfo, ID3V2_HEADER *header, FIL
         int readonly = 0;
         int additional_bytes = parse_frame_header_flags(frame_header.flags, &readonly, f);
 
-        int frame_data_sz = synchsafeint32ToInt(frame_header.size);
+        int frame_data_sz = get_frame_header_size(metainfo, frame_header.size);
         fseek(f, frame_data_sz, SEEK_CUR);
         sz += sizeof(ID3V2_FRAME_HEADER) + additional_bytes + frame_data_sz; // #fid_bytes + #sz_bytes + #flags_bytes + size of frame data
         frames += 1;
@@ -284,7 +314,7 @@ ID3_METAINFO *get_ID3_metainfo(ID3_METAINFO *metainfo, ID3V2_HEADER *header, FIL
         read_frame_header(&frame_header, f, "get_id3_metadata (2): ");
 
         int *frame_data_sz = calloc(1, sizeof(int));
-        *frame_data_sz = synchsafeint32ToInt(frame_header.size);
+        *frame_data_sz = get_frame_header_size(metainfo, frame_header.size); 
         direct_address_insert(metainfo->fid_sz, frame_header.fid, frame_data_sz);
 
         fseek(f, *frame_data_sz, SEEK_CUR);

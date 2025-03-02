@@ -1,5 +1,5 @@
 DEPDIR := .deps
-DEPFLAGS = -MT $@ -MMD -MP -MF $(DEPDIR)/$*.d
+DEPFLAGS = -Wall -g -MT $@ -MMD -MP -MF $(DEPDIR)/$*.d
 
 MAKEDEP = $(CC) $(DEPFLAGS) $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -c $<
 

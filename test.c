@@ -9,7 +9,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
-#include <errno.h>
 
 #include "id3.h"
 #include "id3_parse.h"
@@ -285,11 +284,9 @@ void read_arg_data(TEST_DATA *expected, const DIRECT_HT *args) {
 }
 
 void get_file_data(TEST_DATA *tdata, const char *testfile_path) {
-	ID3V2_HEADER testfile_header;
 	ID3_METAINFO testfile_info;
 	FILE *f = fopen(testfile_path, "rb");
-	read_header(&testfile_header, f, testfile_path, 0);
-	get_ID3_metainfo(&testfile_info, &testfile_header, f, 0);
+	get_ID3_metainfo(&testfile_info, f, testfile_path, 0);
 	
 	tdata->data = direct_address_create(MAX_HASH_VALUE, &all_fids_hash);
 	tdata->data_sz = direct_address_create(MAX_HASH_VALUE, &all_fids_hash);

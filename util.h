@@ -9,7 +9,7 @@
 #define PURP "\033[1;35m"
 #define WHITE_BOLD "\033[1;4;37m"
 
-extern int synchsafeint32ToInt(char c[4]);
+extern int synchsafeint32ToInt(const char c[4]);
 
 extern void intToSynchsafeint32(int x, char ssint[4]);
 

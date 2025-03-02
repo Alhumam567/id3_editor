@@ -40,6 +40,8 @@ typedef struct ID3_METAINFO {
     int frame_count;
     DIRECT_HT *fid_sz;
     int frame_pos;
+    int is_ss; // bool: frame header size is synchsafe 
+    ID3V2_HEADER header;
 } ID3_METAINFO;
 
 typedef struct TEXT_FRAME {

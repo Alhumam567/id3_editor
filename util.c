@@ -16,7 +16,7 @@
  * @param c - Synchsafe int32
  * @return int - Equivalent integer as INT
  */
-int synchsafeint32ToInt(char c[4]) {
+int synchsafeint32ToInt(const char c[4]) {
     return (c[0] << 21) | ((c[1] << 14) | ((c[2] << 7) | (c[3] | (int)0)));
 }
 

@@ -1,10 +1,12 @@
 *.hexdump
 *.exe
+id3_editor
 *.mp3
 *.o
 misc/
 .vscode/
 test/
+test_folder/
 out/
 .deps/
 .cache/

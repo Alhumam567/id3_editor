@@ -116,10 +116,8 @@ int main(int argc, char *argv[]) {
             exit(1);
         }
 
-        ID3V2_HEADER header;
-        ID3_METAINFO header_metainfo;
-        read_header(&header, f, path[id], verbose);
-        get_ID3_metainfo(&header_metainfo, &header, f, verbose);
+        ID3_METAINFO metainfo;
+        get_ID3_metainfo(&metainfo, f, path[id], verbose);
 
         char *t = (titles) ? titles[id] : NULL;
         update_arg_data(arg_data, path[id], dir_len, t, num_titles, verbose);
@@ -127,30 +125,30 @@ int main(int argc, char *argv[]) {
         if (verbose) printf("Calculating additional metadata...\n");
         
         // Calculate new metadata size to predict if metadata header has to be extended
-        int sz_diff = mtdt_sz_diff(&header_metainfo, arg_data);
-        int allocated_mtdt_sz = synchsafeint32ToInt(header.size);
-        if (header_metainfo.metadata_sz + sz_diff >= allocated_mtdt_sz) {
+        int sz_diff = mtdt_sz_diff(&metainfo, arg_data);
+        int allocated_mtdt_sz = synchsafeint32ToInt(metainfo.header.size);
+        if (metainfo.metadata_sz + sz_diff >= allocated_mtdt_sz) {
             if (verbose) printf("Extending file size...\n");
-            f = extend_header(sz_diff, header_metainfo, f, path[id]);
-            direct_address_destroy(header_metainfo.fid_sz);
-            get_ID3_metainfo(&header_metainfo, &header, f, 0);
+            f = extend_header(sz_diff, metainfo, f, path[id]);
+            direct_address_destroy(metainfo.fid_sz);
+            get_ID3_metainfo(&metainfo, f, path[id], 0);
         }
 
         if (verbose) printf("Editing file...\n");
-
+    
         int bytes_read = 0;
         // Search and edit existing frames
-        for(int i = 0; i < header_metainfo.frame_count; i++) {
+        for(int i = 0; i < metainfo.frame_count; i++) {
             ID3V2_FRAME_HEADER frame_header;
             read_frame_header(&frame_header, f);
 
             int readonly = 0;
             int additional_bytes = parse_frame_header_flags(frame_header.flags, &readonly, f);
-            int len_data = synchsafeint32ToInt(frame_header.size);
+            int len_data = get_frame_header_size(&metainfo, metainfo.header.size);
             int ind = dt_hash(arg_data, frame_header.fid);
 
             if (in_key_set(arg_data, frame_header.fid) && !readonly) {
-                int remaining_metadata_sz = header_metainfo.metadata_sz - (bytes_read + sizeof(ID3V2_FRAME_HEADER) + len_data);
+                int remaining_metadata_sz = metainfo.metadata_sz - (bytes_read + sizeof(ID3V2_FRAME_HEADER) + len_data);
                 int new_frame_len = sizeof_frame_data(frame_header.fid, (char *)arg_data->entries[ind]->val);
                 char *frame_data = get_frame_data(frame_header.fid, (char *)arg_data->entries[ind]->val);
                 edit_frame_data(frame_data, new_frame_len, len_data, remaining_metadata_sz, additional_bytes, f);
@@ -165,7 +163,7 @@ int main(int argc, char *argv[]) {
 
         // Append necessary new frames
         for (int i = 0; i < E_FIDS; i++) {
-            if (!arg_data->entries[i] || in_key_set(header_metainfo.fid_sz, e_fids_reverse_lookup[i])) continue;
+            if (!arg_data->entries[i] || in_key_set(metainfo.fid_sz, e_fids_reverse_lookup[i])) continue;
 
             // Construct new frame header
             ID3V2_FRAME_HEADER frame_header;
@@ -182,17 +180,17 @@ int main(int argc, char *argv[]) {
             // Update metainfo struct
             int *fid_sz_new_frame = calloc(1, sizeof(int));
             *fid_sz_new_frame = new_frame_len;
-            direct_address_insert(header_metainfo.fid_sz, frame_header.fid, fid_sz_new_frame);
+            direct_address_insert(metainfo.fid_sz, frame_header.fid, fid_sz_new_frame);
 
-            header_metainfo.frame_count++;
+            metainfo.frame_count++;
         }
         
         if (verbose) { // Print all ID3 tags
             printf("Reading %s metadata :\n", path[id]);
-            print_data(f, &header_metainfo); 
+            print_data(f, &metainfo); 
         }
         
-        direct_address_destroy(header_metainfo.fid_sz);
+        direct_address_destroy(metainfo.fid_sz);
         if (id == path_size - 1) direct_address_destroy(arg_data);
         fclose(f);
     }

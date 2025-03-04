@@ -144,7 +144,7 @@ int main(int argc, char *argv[]) {
 
             int readonly = 0;
             int additional_bytes = parse_frame_header_flags(frame_header.flags, &readonly, f);
-            int len_data = get_frame_header_size(&metainfo, metainfo.header.size);
+            int len_data = get_frame_header_size(&metainfo, frame_header.size);
             int ind = dt_hash(arg_data, frame_header.fid);
 
             if (in_key_set(arg_data, frame_header.fid) && !readonly) {

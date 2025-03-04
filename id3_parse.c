@@ -278,10 +278,10 @@ int parse_frame_header_flags(char flags[2], int *readonly, FILE *f) {
  */
 ID3_METAINFO *get_ID3_metainfo(ID3_METAINFO *metainfo, FILE *f, const char *filename, int verbose) {
     ID3V2_HEADER *header = &(metainfo->header);
-    fseek(f, 10, SEEK_SET); // Set FILE * to end of header
+    fseek(f, 0, SEEK_SET);
+    read_header(header, f, filename, verbose);
     metainfo->frame_pos = parse_header_flags(header, f); // Parse header flags and seek past extended header if necessary
     metainfo->is_ss = (header->ver[0] == 3) ? 0 : 1;
-    read_header(&(metainfo->header), f, filename, verbose);
 
     int sz = 0;
     int frames = 0;

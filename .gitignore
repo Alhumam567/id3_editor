@@ -1,14 +1,22 @@
-*.hexdump
+# Executables
 *.exe
 id3_editor
-*.mp3
+test
+
+# Compilation output
 *.o
-misc/
-.vscode/
-test/
-test_folder/
 out/
 .deps/
 .cache/
+
+# Test files
+test/
+test_folder/
 path.h
+
+# Misc files
+*.hexdump
+*.mp3
+misc/
+.vscode/
 compile_commands.json

@@ -11,20 +11,25 @@
  * @brief Writes new length as synchsafe int of size 4. File pointer must be pointing to first byte (big endian)
  * 
  * @param new_len - New length of ID3 frame data (must include initial null byte)
+ * @param is_synchsafe - new_data_len is synchsafe bool
  * @param f - File pointer
  * @param verbose - Prints out new length integer as synchsafe int 
  * @return int - returns new length
  */
-int write_new_len(int new_len, FILE *f, int verbose) {
-    char synchsafe_nl[4];
-    intToSynchsafeint32(new_len, synchsafe_nl);
+int write_new_len(int new_len, int is_synchsafe, FILE *f, int verbose) {
+    char nl[4];
+	if (is_synchsafe)
+		intToSynchsafeint32(new_len, nl);
+	else {
+		for (int i = 0; i < 4; i++) nl[3-i] = (new_len >> i*8) & 0xFF;
+	}
     
     if (verbose) {
         for (int i=0; i < 4; i++)
-            printf("%d\n",synchsafe_nl[i]);
+            printf("%d\n",nl[i]);
     }
     
-    fwrite(synchsafe_nl, 1, 4, f);
+    fwrite(nl, 1, 4, f);
 
     return new_len;
 }
@@ -183,15 +188,16 @@ int read_frame_data(FILE *f, int len_data) {
  * 
  * @param new_data - New data to update frame
  * @param new_data_len - Length of new data
+ * @param is_synchsafe - new_data_len is synchsafe bool
  * @param prev_data_len - Length of current data
  * @param remaining_metadata_sz - Metadata size remaining in header
  * @param additional_bytes - Length of additional bytes in frame header
  * @param f - File
  */
-void edit_frame_data(char *new_data, int new_data_len, int prev_data_len, int remaining_metadata_sz, int additional_bytes, FILE *f) {
+void edit_frame_data(char *new_data, int new_data_len, int is_synchsafe, int prev_data_len, int remaining_metadata_sz, int additional_bytes, FILE *f) {
     // Return file pointer to beginning of new length and write new length
     fseek(f, -1 * (6 + additional_bytes), SEEK_CUR); 
-    write_new_len(new_data_len, f, 0);
+    write_new_len(new_data_len, is_synchsafe, f, 0);
     fseek(f, 2 + additional_bytes, SEEK_CUR); 
 
     overwrite_frame_data(new_data, new_data_len, prev_data_len, remaining_metadata_sz, f);

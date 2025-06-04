@@ -27,8 +27,10 @@ int synchsafeint32ToInt(const char c[4]) {
  * @param ssint - Equivalent synchsafe int32
  */
 void intToSynchsafeint32(int x, char ssint[4]) {
-    for (int i=0; i<4; i++) ssint[3-i] = (x & (0x7F << i*7)) >> i*7;
+    for (int i=0; i<4; i++) ssint[3-i] = (x & (0x7F << i*7)) >> i*7;	
+	// for (int i=0; i<4; i++) ssint[3-i] = (x >> i*7) & 0x7F); 
 }
+
 
 /**
  * @brief Concatenate two strings: s1 + s2

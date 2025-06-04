@@ -118,6 +118,8 @@ int main(int argc, char *argv[]) {
 
         ID3_METAINFO metainfo;
         get_ID3_metainfo(&metainfo, f, path[id], verbose);
+		if (metainfo.is_ss) printf("File uses synchsafe header sizes\n");
+		else printf("File does not use synchsafe header sizes\n");
 
         char *t = (titles) ? titles[id] : NULL;
         update_arg_data(arg_data, path[id], dir_len, t, num_titles, verbose);
@@ -151,7 +153,7 @@ int main(int argc, char *argv[]) {
                 int remaining_metadata_sz = metainfo.metadata_sz - (bytes_read + sizeof(ID3V2_FRAME_HEADER) + len_data);
                 int new_frame_len = sizeof_frame_data(frame_header.fid, (char *)arg_data->entries[ind]->val);
                 char *frame_data = get_frame_data(frame_header.fid, (char *)arg_data->entries[ind]->val);
-                edit_frame_data(frame_data, new_frame_len, len_data, remaining_metadata_sz, additional_bytes, f);
+                edit_frame_data(frame_data, new_frame_len, metainfo.is_ss, len_data, remaining_metadata_sz, additional_bytes, f);
                 free(frame_data);
                 len_data = new_frame_len;
             }
@@ -171,8 +173,13 @@ int main(int argc, char *argv[]) {
             strncpy(frame_header.fid, e_fids_reverse_lookup[i], 4);
             int new_frame_len = sizeof_frame_data(frame_header.fid, (char *)arg_data->entries[i]->val);
             char *frame_data = get_frame_data(frame_header.fid, (char *)arg_data->entries[i]->val);
-            intToSynchsafeint32(new_frame_len, frame_header.size);
-            strncpy(frame_header.flags, flags, 2);
+			if (metainfo.is_ss)
+				intToSynchsafeint32(new_frame_len, frame_header.size);
+			else {
+				// Chunk up int32 into 4 chunks, frame_header.size order is MSB to LSB 
+				for (int i = 0; i < 4; i++) frame_header.size[3-i] = (new_frame_len >> i*8) & 0xFF;
+			}
+			strncpy(frame_header.flags, flags, 2);
 
             append_new_frame(frame_header, frame_data, new_frame_len, f);
             free(frame_data);
